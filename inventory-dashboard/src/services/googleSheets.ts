@@ -8,6 +8,18 @@ const PRODUCTS_GID = import.meta.env.VITE_PRODUCTS_GID;
 const HISTORY_GID = import.meta.env.VITE_HISTORY_GID;
 const MIN_AMOUNT_GID = import.meta.env.VITE_MIN_AMOUNT_GID;
 
+function parseDateString(dateStr: string): Date | null {
+  // Try DD/MM/YYYY first (Israeli format)
+  const ddmmyyyy = dateStr.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+  if (ddmmyyyy) {
+    const [, d, m, y] = ddmmyyyy;
+    return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+  }
+  // Fallback to ISO
+  const iso = new Date(dateStr);
+  return isNaN(iso.getTime()) ? null : iso;
+}
+
 function buildCsvUrl(gid: string): string {
   return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
 }
@@ -94,13 +106,27 @@ export async function fetchOrders(): Promise<Order[]> {
 
   return raw
     .filter((row) => row["שם פריט"]?.trim())
-    .map((row) => ({
-      orderDate: row["תאריך הזמנה"]?.trim() ?? "",
-      supplierSku: row["מק\"ט פאר-פארם"]?.trim() ?? "",
-      dermaSku: row[dermaSkuKey]?.trim() ?? "",
-      quantity: row[qtyKey]?.trim() ?? "",
-      productName: row["שם פריט"]?.trim() ?? "",
-      received: row[receivedKey]?.trim() ?? "",
-      expectedDate: row[expectedKey]?.trim() ?? "",
-    }));
+    .map((row) => {
+      const orderDateStr = row["תאריך הזמנה"]?.trim() ?? "";
+      let expectedDate = row[expectedKey]?.trim() ?? "";
+
+      // If no expected date, default to order date + 3 months
+      if (!expectedDate && orderDateStr) {
+        const parsed = parseDateString(orderDateStr);
+        if (parsed) {
+          parsed.setMonth(parsed.getMonth() + 3);
+          expectedDate = `${parsed.getDate().toString().padStart(2, "0")}/${(parsed.getMonth() + 1).toString().padStart(2, "0")}/${parsed.getFullYear()}`;
+        }
+      }
+
+      return {
+        orderDate: orderDateStr,
+        supplierSku: row["מק\"ט פאר-פארם"]?.trim() ?? "",
+        dermaSku: row[dermaSkuKey]?.trim() ?? "",
+        quantity: row[qtyKey]?.trim() ?? "",
+        productName: row["שם פריט"]?.trim() ?? "",
+        received: row[receivedKey]?.trim() ?? "",
+        expectedDate,
+      };
+    });
 }

@@ -147,14 +147,15 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay }: Produ
                   fontSize: "12px",
                   direction: "rtl",
                 }}
-                formatter={(value: number, name: string) => {
+                formatter={(value: number | undefined, name: string | undefined) => {
                   const labels: Record<string, string> = {
                     quantity: "מלאי בפועל",
                     forecast: "תחזית",
                     onTheWay: "עם הזמנות בדרך",
                     minAmount: "כמות מינימום",
                   };
-                  return [value, labels[name] ?? name];
+                  const label = name ? (labels[name] ?? name) : "";
+                  return [value ?? 0, label];
                 }}
               />
               <ReferenceLine
