@@ -105,7 +105,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay }: Produ
         )}
       </CardHeader>
       <CardContent className="p-0 pr-0">
-        <div className="h-52 w-full">
+        <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={chartData}
@@ -193,7 +193,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay }: Produ
                 strokeWidth={2}
                 strokeDasharray="6 3"
                 fill={`url(#gradient-forecast-${sku})`}
-                connectNulls={false}
+                connectNulls={true}
                 dot={{ r: 2, fill: "oklch(0.646 0.222 41.116)" }}
               />
               {/* On the way (forecast + orders) */}
@@ -204,7 +204,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay }: Produ
                 strokeWidth={2}
                 strokeDasharray="4 4"
                 fill={`url(#gradient-order-${sku})`}
-                connectNulls={false}
+                connectNulls={true}
                 dot={{ r: 2, fill: "oklch(0.623 0.214 259.815)" }}
               />
             </AreaChart>

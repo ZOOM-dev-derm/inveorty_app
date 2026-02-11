@@ -123,7 +123,7 @@ export async function fetchOrders(): Promise<Order[]> {
         orderDate: orderDateStr,
         supplierSku: row["מק\"ט פאר-פארם"]?.trim() ?? "",
         dermaSku: row[dermaSkuKey]?.trim() ?? "",
-        quantity: row[qtyKey]?.trim() ?? "",
+        quantity: (row[qtyKey]?.trim() ?? "").replace(/,/g, ""),
         productName: row["שם פריט"]?.trim() ?? "",
         received: row[receivedKey]?.trim() ?? "",
         expectedDate,

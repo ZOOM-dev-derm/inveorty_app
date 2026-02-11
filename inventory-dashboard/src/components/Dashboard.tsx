@@ -47,7 +47,7 @@ function DashboardContent() {
   }, [items, search]);
 
   const totalStock = items?.reduce((sum, i) => sum + i.currentStock, 0) ?? 0;
-  const totalOnTheWay = items?.reduce((sum, i) => sum + i.onTheWay, 0) ?? 0;
+  const productsOnTheWay = items?.filter((i) => i.onTheWay > 0).length ?? 0;
   const lowStockCount = items?.filter((i) => i.currentStock < 15).length ?? 0;
 
   return (
@@ -99,7 +99,7 @@ function DashboardContent() {
               <div className="text-xs text-violet-600 font-medium flex items-center gap-1">
                 <ShoppingCart className="h-3 w-3" /> בדרך
               </div>
-              <div className="text-2xl font-bold text-violet-700 mt-1">{totalOnTheWay.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-violet-700 mt-1">{productsOnTheWay}</div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-100">
@@ -186,7 +186,7 @@ function DashboardContent() {
                     {search && ` (מסוננים מתוך ${items?.length ?? 0})`}
                   </Badge>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 lg:grid-cols-2">
                   {filteredItems.map((item) => (
                     <ProductGraph
                       key={item.sku}
