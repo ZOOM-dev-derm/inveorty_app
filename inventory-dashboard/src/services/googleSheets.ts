@@ -106,7 +106,7 @@ export async function fetchOrders(): Promise<Order[]> {
 
   return raw
     .filter((row) => row["שם פריט"]?.trim())
-    .map((row) => {
+    .map((row, idx) => {
       const orderDateStr = row["תאריך הזמנה"]?.trim() ?? "";
       let expectedDate = row[expectedKey]?.trim() ?? "";
 
@@ -127,6 +127,52 @@ export async function fetchOrders(): Promise<Order[]> {
         productName: row["שם פריט"]?.trim() ?? "",
         received: row[receivedKey]?.trim() ?? "",
         expectedDate,
+        rowIndex: idx + 2, // 1-based, +1 for header row, +1 for 0-index
       };
     });
+}
+
+// ── Write operations ──
+
+const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL;
+
+async function postToSheet(action: string, data?: Record<string, unknown>): Promise<{ success: boolean; error?: string; added?: number }> {
+  if (!APPS_SCRIPT_URL) {
+    throw new Error("VITE_APPS_SCRIPT_URL is not configured");
+  }
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify({ action, data }),
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  if (!json.success) {
+    throw new Error(json.error || "Unknown error");
+  }
+  return json;
+}
+
+export async function addProduct(data: { name: string; sku: string; barcode: string }) {
+  return postToSheet("addProduct", data);
+}
+
+export async function addOrder(data: {
+  orderDate: string;
+  supplierSku: string;
+  dermaSku: string;
+  quantity: string;
+  productName: string;
+  expectedDate: string;
+}) {
+  return postToSheet("addOrder", data);
+}
+
+export async function updateOrderStatus(rowIndex: number, received: boolean) {
+  return postToSheet("updateOrderStatus", { rowIndex, received });
+}
+
+export async function syncMissingProducts() {
+  return postToSheet("syncMissingProducts");
 }

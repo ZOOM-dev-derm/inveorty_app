@@ -1,4 +1,4 @@
-import { useOpenOrders } from "@/hooks/useSheetData";
+import { useOpenOrders, useUpdateOrderStatus } from "@/hooks/useSheetData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -9,7 +9,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ShoppingCart, Loader2, Check } from "lucide-react";
 
 function parseDate(dateStr: string): Date | null {
   if (!dateStr) return null;
@@ -40,6 +41,7 @@ function getStatusBadge(expectedDate: string) {
 
 export function OpenOrders() {
   const { data: orders, isLoading, error } = useOpenOrders();
+  const statusMutation = useUpdateOrderStatus();
 
   return (
     <Card>
@@ -76,6 +78,7 @@ export function OpenOrders() {
                   <TableHead>כמות</TableHead>
                   <TableHead>תאריך צפי</TableHead>
                   <TableHead>סטטוס</TableHead>
+                  <TableHead>התקבל</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -88,6 +91,26 @@ export function OpenOrders() {
                     <TableCell>{order.quantity}</TableCell>
                     <TableCell>{order.expectedDate || "—"}</TableCell>
                     <TableCell>{getStatusBadge(order.expectedDate)}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        disabled={statusMutation.isPending}
+                        onClick={() =>
+                          statusMutation.mutate({
+                            rowIndex: order.rowIndex,
+                            received: true,
+                          })
+                        }
+                      >
+                        {statusMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

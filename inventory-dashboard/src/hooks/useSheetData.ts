@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { fetchInventory, fetchProducts, fetchOrders, fetchHistory, fetchMinAmount } from "@/services/googleSheets";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchInventory, fetchProducts, fetchOrders, fetchHistory, fetchMinAmount, addProduct, addOrder, updateOrderStatus, syncMissingProducts } from "@/services/googleSheets";
 import type { InventoryItem, Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint, MinAmountItem } from "@/types";
 
 const FIVE_MINUTES = 5 * 60 * 1000;
@@ -295,6 +295,48 @@ function parseDate(dateStr: string): Date | null {
 
 function formatDateShort(d: Date): string {
   return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}`;
+}
+
+// ── Mutation hooks ──
+
+export function useAddProduct() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; sku: string; barcode: string }) => addProduct(data),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useAddOrder() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { orderDate: string; supplierSku: string; dermaSku: string; quantity: string; productName: string; expectedDate: string }) => addOrder(data),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+}
+
+export function useUpdateOrderStatus() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { rowIndex: number; received: boolean }) => updateOrderStatus(data.rowIndex, data.received),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+}
+
+export function useSyncMissingProducts() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => syncMissingProducts(),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
 }
 
 export function useOpenOrders() {

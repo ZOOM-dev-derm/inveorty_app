@@ -3,7 +3,10 @@ import { OpenOrders } from "./OpenOrders";
 import { LowStock } from "./LowStock";
 import { ProductGraph } from "./ProductGraph";
 import { useInventoryOverview } from "@/hooks/useSheetData";
-import { Package, RefreshCw, Search, BarChart3, ShoppingCart, AlertTriangle } from "lucide-react";
+import { useSyncMissingProducts } from "@/hooks/useSheetData";
+import { AddProductDialog } from "./AddProductDialog";
+import { AddOrderDialog } from "./AddOrderDialog";
+import { Package, RefreshCw, Search, BarChart3, ShoppingCart, AlertTriangle, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +31,7 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState<Tab>("graphs");
 
   const { data: items, isLoading, error } = useInventoryOverview();
+  const syncMutation = useSyncMissingProducts();
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -65,16 +69,34 @@ function DashboardContent() {
                 <p className="text-xs text-muted-foreground">ניתוח מגמות ותחזית מלאי</p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              רענן
-            </Button>
+            <div className="flex items-center gap-2">
+              <AddProductDialog />
+              <AddOrderDialog />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending}
+                className="gap-2"
+              >
+                {syncMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                סנכרן מוצרים
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                רענן
+              </Button>
+            </div>
           </div>
         </div>
       </header>
