@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OpenOrders } from "./OpenOrders";
-import { LowStock } from "./LowStock";
+
 import { ProductGraph } from "./ProductGraph";
 import { useInventoryOverview } from "@/hooks/useSheetData";
 import { useSyncMissingProducts } from "@/hooks/useSheetData";
@@ -225,10 +225,7 @@ function DashboardContent() {
         )}
 
         {activeTab === "orders" && (
-          <div className="grid gap-6 md:grid-cols-2">
-            <OpenOrders />
-            <LowStock />
-          </div>
+          <OpenOrders />
         )}
 
         <footer className="text-center text-xs text-muted-foreground pb-4">
