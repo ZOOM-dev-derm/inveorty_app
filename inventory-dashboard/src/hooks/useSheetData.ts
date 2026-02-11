@@ -146,6 +146,22 @@ export function useProductForecast(sku: string, currentStock: number) {
       // Generate forecast points (every 15 days) with orders as jumps
       let runningQty = currentStock;
       const forecastStart = today > lastDate ? today : lastDate;
+
+      // Add overdue orders (expected before forecast start but not yet received)
+      for (const order of skuOrders) {
+        if (order.expectedDate! <= forecastStart) {
+          runningQty += order.qty;
+          console.debug(`[Forecast] SKU ${sku}: adding overdue order qty ${order.qty} (expected ${order.expectedDate!.toISOString().slice(0, 10)})`);
+        }
+      }
+
+      // Update the transition point at today to reflect overdue orders
+      const todayLabel = formatDateShort(today);
+      const todayPoint = chartData.find((p) => p.date === todayLabel && p.forecast !== null);
+      if (todayPoint) {
+        todayPoint.forecast = runningQty;
+      }
+
       for (let i = 1; i <= 12; i++) {
         const prevDate = new Date(forecastStart);
         prevDate.setDate(prevDate.getDate() + (i - 1) * 15);
@@ -156,6 +172,71 @@ export function useProductForecast(sku: string, currentStock: number) {
         runningQty = runningQty + forecastSlope * 15;
 
         // Add any orders arriving in this 15-day window (prevDate, futureDate]
+        for (const order of skuOrders) {
+          if (order.expectedDate! > prevDate && order.expectedDate! <= futureDate) {
+            runningQty += order.qty;
+          }
+        }
+
+        chartData.push({
+          date: formatDateShort(futureDate),
+          quantity: null,
+          forecast: Math.max(0, Math.round(runningQty)),
+          onTheWay: null,
+          minAmount: minAmount,
+        });
+      }
+    } else if (currentStock > 0) {
+      // No history — use current stock as starting point
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const forecastSlope = minAmount !== null ? minRate : 0;
+      declineRate = forecastSlope;
+
+      chartData.push({
+        date: formatDateShort(today),
+        quantity: currentStock,
+        forecast: currentStock,
+        onTheWay: null,
+        minAmount: minAmount,
+      });
+
+      // Open orders for this SKU
+      const RECEIVED_VALUES = ["כן", "v", "✓", "true", "yes"];
+      const skuOrders = orders
+        .filter((o) => o.dermaSku === sku)
+        .filter((o) => !RECEIVED_VALUES.includes((o.received || "").toString().trim().toLowerCase()))
+        .map((o) => ({
+          qty: parseInt(o.quantity, 10) || 0,
+          expectedDate: parseDate(o.expectedDate),
+        }))
+        .filter((o) => o.expectedDate !== null)
+        .sort((a, b) => a.expectedDate!.getTime() - b.expectedDate!.getTime());
+
+      // Generate 12 forecast points at 15-day intervals
+      let runningQty = currentStock;
+
+      // Add overdue orders (expected before today but not yet received)
+      for (const order of skuOrders) {
+        if (order.expectedDate! <= today) {
+          runningQty += order.qty;
+        }
+      }
+
+      // Update starting point to reflect overdue orders
+      if (chartData.length > 0) {
+        chartData[chartData.length - 1].forecast = runningQty;
+      }
+
+      for (let i = 1; i <= 12; i++) {
+        const prevDate = new Date(today);
+        prevDate.setDate(prevDate.getDate() + (i - 1) * 15);
+        const futureDate = new Date(today);
+        futureDate.setDate(futureDate.getDate() + i * 15);
+
+        runningQty = runningQty + forecastSlope * 15;
+
         for (const order of skuOrders) {
           if (order.expectedDate! > prevDate && order.expectedDate! <= futureDate) {
             runningQty += order.qty;
