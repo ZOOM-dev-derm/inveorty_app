@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import {
   AreaChart,
   Area,
@@ -7,6 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  Brush,
 } from "recharts";
 import { useProductForecast } from "@/hooks/useSheetData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +24,21 @@ interface ProductGraphProps {
 
 export function ProductGraph({ sku, productName, currentStock, onTheWay }: ProductGraphProps) {
   const { chartData, declineRate, minAmount, realRate, minRate, isLoading, error } = useProductForecast(sku, currentStock);
+
+  const [brushRange, setBrushRange] = useState<{ startIndex: number; endIndex: number } | undefined>();
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const dataLen = chartData.length;
+    if (dataLen < 3) return;
+    const start = brushRange?.startIndex ?? 0;
+    const end = brushRange?.endIndex ?? dataLen - 1;
+    const zoomDir = e.deltaY < 0 ? 1 : -1; // up = zoom in
+    const step = Math.max(1, Math.round((end - start) * 0.1));
+    const newStart = Math.min(end - 2, Math.max(0, start + zoomDir * step));
+    const newEnd = Math.max(newStart + 2, Math.min(dataLen - 1, end - zoomDir * step));
+    setBrushRange({ startIndex: newStart, endIndex: newEnd });
+  }, [chartData.length, brushRange]);
 
   const ratePerMonth = Math.round(declineRate * 30);
   const realRatePerMonth = Math.round(realRate * 30);
@@ -105,7 +122,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay }: Produ
         )}
       </CardHeader>
       <CardContent className="p-0 pr-0">
-        <div className="h-72 w-full">
+        <div className="h-80 w-full cursor-grab active:cursor-grabbing" onWheel={handleWheel}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={chartData}
@@ -206,6 +223,16 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay }: Produ
                 fill={`url(#gradient-order-${sku})`}
                 connectNulls={true}
                 dot={{ r: 2, fill: "oklch(0.623 0.214 259.815)" }}
+              />
+              <Brush
+                dataKey="date"
+                height={30}
+                stroke="oklch(0.7 0.05 260)"
+                fill="oklch(0.97 0.005 260)"
+                travellerWidth={8}
+                startIndex={brushRange?.startIndex}
+                endIndex={brushRange?.endIndex}
+                onChange={(range) => setBrushRange(range as { startIndex: number; endIndex: number })}
               />
             </AreaChart>
           </ResponsiveContainer>
