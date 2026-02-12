@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OpenOrders } from "./OpenOrders";
 
 import { ProductGraph } from "./ProductGraph";
-import { useInventoryOverview } from "@/hooks/useSheetData";
+import { useInventoryOverview, useCriticalDates } from "@/hooks/useSheetData";
 import { useSyncMissingProducts } from "@/hooks/useSheetData";
 import { AddProductDialog } from "./AddProductDialog";
 import { AddOrderDialog } from "./AddOrderDialog";
@@ -31,6 +31,7 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState<Tab>("graphs");
 
   const { data: items, isLoading, error } = useInventoryOverview();
+  const criticalDates = useCriticalDates(items ?? []);
   const syncMutation = useSyncMissingProducts();
 
   const handleNavigateToOrders = useCallback((productName: string) => {
@@ -46,14 +47,25 @@ function DashboardContent() {
 
   const filteredItems = useMemo(() => {
     if (!items) return [];
-    if (!search.trim()) return items;
-    const q = search.trim().toLowerCase();
-    return items.filter(
-      (item) =>
-        item.productName.toLowerCase().includes(q) ||
-        item.sku.toLowerCase().includes(q)
-    );
-  }, [items, search]);
+    let result = items;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.productName.toLowerCase().includes(q) ||
+          item.sku.toLowerCase().includes(q)
+      );
+    }
+    // Sort: items with critical dates first (soonest first), then items without
+    return [...result].sort((a, b) => {
+      const da = criticalDates.get(a.sku);
+      const db = criticalDates.get(b.sku);
+      if (da && db) return da.getTime() - db.getTime();
+      if (da && !db) return -1;
+      if (!da && db) return 1;
+      return 0;
+    });
+  }, [items, search, criticalDates]);
 
   const totalStock = items?.reduce((sum, i) => sum + i.currentStock, 0) ?? 0;
   const productsOnTheWay = items?.filter((i) => i.onTheWay > 0).length ?? 0;

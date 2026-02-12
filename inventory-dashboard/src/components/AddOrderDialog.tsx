@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAddOrder } from "@/hooks/useSheetData";
 import {
   Dialog,
@@ -17,8 +17,28 @@ function todayFormatted(): string {
   return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-export function AddOrderDialog() {
-  const [open, setOpen] = useState(false);
+export interface OrderInitialData {
+  productName: string;
+  dermaSku: string;
+  quantity: string;
+  expectedDate: string;
+}
+
+interface AddOrderDialogProps {
+  initialData?: OrderInitialData;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  trigger?: React.ReactNode;
+}
+
+export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange, trigger }: AddOrderDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  // Controlled vs uncontrolled open state
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? (onOpenChange ?? (() => {})) : setInternalOpen;
+
   const [orderDate, setOrderDate] = useState(todayFormatted());
   const [supplierSku, setSupplierSku] = useState("");
   const [dermaSku, setDermaSku] = useState("");
@@ -26,6 +46,27 @@ export function AddOrderDialog() {
   const [productName, setProductName] = useState("");
   const [expectedDate, setExpectedDate] = useState("");
   const mutation = useAddOrder();
+
+  // Pre-fill fields when dialog opens with initialData
+  useEffect(() => {
+    if (open && initialData) {
+      setProductName(initialData.productName);
+      setDermaSku(initialData.dermaSku);
+      setQuantity(initialData.quantity);
+      setExpectedDate(initialData.expectedDate);
+      setOrderDate(todayFormatted());
+      setSupplierSku("");
+    }
+  }, [open, initialData]);
+
+  const resetFields = () => {
+    setOrderDate(todayFormatted());
+    setSupplierSku("");
+    setDermaSku("");
+    setQuantity("");
+    setProductName("");
+    setExpectedDate("");
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,25 +82,24 @@ export function AddOrderDialog() {
       },
       {
         onSuccess: () => {
-          setOrderDate(todayFormatted());
-          setSupplierSku("");
-          setDermaSku("");
-          setQuantity("");
-          setProductName("");
-          setExpectedDate("");
+          resetFields();
           setOpen(false);
         },
       }
     );
   };
 
+  const defaultTrigger = (
+    <Button variant="outline" size="sm" className="gap-2">
+      <Plus className="h-4 w-4" />
+      הוסף הזמנה
+    </Button>
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Plus className="h-4 w-4" />
-          הוסף הזמנה
-        </Button>
+        {trigger ?? defaultTrigger}
       </DialogTrigger>
       <DialogContent dir="rtl">
         <DialogHeader>

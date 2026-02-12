@@ -13,7 +13,9 @@ import {
 } from "recharts";
 import { useProductForecast } from "@/hooks/useSheetData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingDown, TrendingUp, Minus, Truck, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AddOrderDialog } from "./AddOrderDialog";
+import { TrendingDown, TrendingUp, Minus, Truck, AlertCircle, ShoppingCart } from "lucide-react";
 
 interface ProductGraphProps {
   sku: string;
@@ -49,11 +51,14 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
   // Real decline is faster (more negative) than min-based rate
   const realFasterThanMin = minAmount !== null && realRate < minRate;
 
-  // Find critical point — first forecast point that drops to <= 5 units
+  // Find critical point — first forecast point that drops to <= minAmount
   const criticalPoint = useMemo(() => {
-    const fp = chartData.filter(p => p.forecast !== null && p.forecast !== undefined && p.forecast <= 5 && p.quantity === null);
+    if (minAmount === null) return null;
+    const fp = chartData.filter(
+      p => p.forecast !== null && p.forecast !== undefined && p.forecast <= minAmount && p.quantity === null
+    );
     return fp.length > 0 ? fp[0] : null;
-  }, [chartData]);
+  }, [chartData, minAmount]);
 
   if (isLoading) {
     return (
@@ -142,6 +147,24 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
               <AlertCircle className="h-3 w-3" />
               <span className="font-semibold">זמן להזמנה</span>
             </span>
+          )}
+
+          {/* Quick Order Button */}
+          {criticalPoint && minAmount !== null && (
+            <AddOrderDialog
+              trigger={
+                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs px-2.5 border-primary/30 text-primary hover:bg-primary/5">
+                  <ShoppingCart className="h-3 w-3" />
+                  הזמן עכשיו
+                </Button>
+              }
+              initialData={{
+                productName,
+                dermaSku: sku,
+                quantity: String(minAmount),
+                expectedDate: criticalPoint.date,
+              }}
+            />
           )}
         </div>
 

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { fetchInventory, fetchProducts, fetchOrders, fetchHistory, fetchMinAmount, addProduct, addOrder, updateOrderStatus, syncMissingProducts } from "@/services/googleSheets";
 import type { InventoryItem, Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint, MinAmountItem } from "@/types";
 
@@ -292,7 +293,7 @@ export function useProductForecast(sku: string, currentStock: number) {
   return { chartData, declineRate, minAmount, realRate, minRate, isLoading, error };
 }
 
-function parseDate(dateStr: string): Date | null {
+export function parseDate(dateStr: string): Date | null {
   if (!dateStr) return null;
   // Try DD/MM/YYYY, DD.MM.YYYY, DD-MM-YYYY
   const parts = dateStr.split(/[\/\.\-]/);
@@ -311,6 +312,39 @@ function parseDate(dateStr: string): Date | null {
 
 function formatDateShort(d: Date): string {
   return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}`;
+}
+
+export function useCriticalDates(items: InventoryOverviewItem[]) {
+  const { data: history } = useHistory();
+  const { data: orders } = useOrders();
+  const { data: minAmountData } = useMinAmount();
+
+  return useMemo(() => {
+    const dateMap = new Map<string, Date | null>();
+    if (!history || !items.length) return dateMap;
+
+    for (const item of items) {
+      const minEntry = minAmountData?.find(m => m.sku === item.sku);
+      if (!minEntry) { dateMap.set(item.sku, null); continue; }
+      const minAmt = minEntry.minAmount;
+
+      // Use min-based rate: minAmount / 180 days (same logic as useProductForecast)
+      const forecastSlope = -(minAmt / 180); // units per day, negative = decline
+
+      if (forecastSlope >= 0) { dateMap.set(item.sku, null); continue; }
+
+      // Days from today until stock hits minAmount
+      const daysToMin = (item.currentStock - minAmt) / Math.abs(forecastSlope);
+      if (daysToMin <= 0) {
+        dateMap.set(item.sku, new Date()); // already below min
+      } else {
+        const critDate = new Date();
+        critDate.setDate(critDate.getDate() + Math.round(daysToMin));
+        dateMap.set(item.sku, critDate);
+      }
+    }
+    return dateMap;
+  }, [items, history, orders, minAmountData]);
 }
 
 // ── Mutation hooks ──
