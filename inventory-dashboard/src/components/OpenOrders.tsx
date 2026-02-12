@@ -193,7 +193,9 @@ export function OpenOrders({ search }: { search: string }) {
       ? orders.filter(
           (o) =>
             o.productName.toLowerCase().includes(q) ||
-            o.orderDate.toLowerCase().includes(q)
+            o.orderDate.toLowerCase().includes(q) ||
+            (o.dermaSku || "").toLowerCase().includes(q) ||
+            (o.supplierSku || "").toLowerCase().includes(q)
         )
       : orders;
 
