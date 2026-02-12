@@ -3,8 +3,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddOrderDialog } from "./AddOrderDialog";
 import { ShoppingCart, Loader2, Check, Calendar, Package, Clock } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Order } from "@/types";
+
+type GroupMode = "date" | "product";
 
 function parseDate(dateStr: string): Date | null {
   if (!dateStr) return null;
@@ -51,13 +53,13 @@ function isOverdue(order: Order): boolean {
   return date < today;
 }
 
-interface DateGroup {
-  orderDate: string;
+interface OrderGroup {
+  label: string;
   orders: Order[];
   hasOverdue: boolean;
 }
 
-function OrderItem({ order, index }: { order: Order; index: number }) {
+function OrderItem({ order, index, mode }: { order: Order; index: number; mode: GroupMode }) {
   const statusMutation = useUpdateOrderStatus();
   const { date: expectedDate, estimated } = getExpectedDate(order);
   const overdue = isOverdue(order);
@@ -73,8 +75,17 @@ function OrderItem({ order, index }: { order: Order; index: number }) {
       }}
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <span className="text-sm font-medium truncate">{order.productName}</span>
+        {mode === "date" ? (
+          <>
+            <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="text-sm font-medium truncate">{order.productName}</span>
+          </>
+        ) : (
+          <>
+            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="text-sm font-medium truncate">{order.orderDate || "לא ידוע"}</span>
+          </>
+        )}
         <Badge variant="outline" className="text-xs shrink-0">
           {order.quantity}
         </Badge>
@@ -115,7 +126,9 @@ function OrderItem({ order, index }: { order: Order; index: number }) {
   );
 }
 
-function DateCard({ group }: { group: DateGroup }) {
+function OrderGroupCard({ group, mode }: { group: OrderGroup; mode: GroupMode }) {
+  const Icon = mode === "date" ? Calendar : Package;
+
   return (
     <div
       className={`group relative rounded-xl border-2 p-4 transition-all duration-300 cursor-default
@@ -129,10 +142,10 @@ function DateCard({ group }: { group: DateGroup }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className={`p-2 rounded-lg ${group.hasOverdue ? "bg-destructive/10" : "bg-primary/10"}`}>
-            <Calendar className={`h-4 w-4 ${group.hasOverdue ? "text-destructive" : "text-primary"}`} />
+            <Icon className={`h-4 w-4 ${group.hasOverdue ? "text-destructive" : "text-primary"}`} />
           </div>
           <div>
-            <div className="font-bold text-base">{group.orderDate}</div>
+            <div className="font-bold text-base">{group.label}</div>
             <div className="text-xs text-muted-foreground flex items-center gap-1">
               <Package className="h-3 w-3" />
               {group.orders.length} פריטים
@@ -147,11 +160,11 @@ function DateCard({ group }: { group: DateGroup }) {
         )}
       </div>
 
-      {/* Hover reveal — product details */}
+      {/* Hover reveal — order details */}
       <div className="mt-3 max-h-0 overflow-hidden transition-all duration-300 group-hover:max-h-[500px]">
         <div className="pt-2 border-t border-border/30">
           {group.orders.map((order, idx) => (
-            <OrderItem key={`${order.supplierSku}-${order.rowIndex}`} order={order} index={idx} />
+            <OrderItem key={`${order.supplierSku}-${order.rowIndex}`} order={order} index={idx} mode={mode} />
           ))}
           <div className="text-[10px] text-muted-foreground mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-300">
             * תאריך משוער (תאריך הזמנה + 3 חודשים)
@@ -164,28 +177,40 @@ function DateCard({ group }: { group: DateGroup }) {
 
 export function OpenOrders() {
   const { data: orders, isLoading, error } = useOpenOrders();
-  const groups = useMemo<DateGroup[]>(() => {
+  const [groupMode, setGroupMode] = useState<GroupMode>("date");
+
+  const groups = useMemo<OrderGroup[]>(() => {
     if (!orders) return [];
     const map = new Map<string, Order[]>();
+
     for (const order of orders) {
-      const key = order.orderDate || "לא ידוע";
+      const key =
+        groupMode === "date"
+          ? order.orderDate || "לא ידוע"
+          : order.productName || "לא ידוע";
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(order);
     }
-    // Sort groups by date descending (newest first)
-    return Array.from(map.entries())
-      .map(([orderDate, ords]) => ({
-        orderDate,
-        orders: ords,
-        hasOverdue: ords.some(isOverdue),
-      }))
-      .sort((a, b) => {
-        const da = parseDate(a.orderDate);
-        const db = parseDate(b.orderDate);
+
+    const entries = Array.from(map.entries()).map(([label, ords]) => ({
+      label,
+      orders: ords,
+      hasOverdue: ords.some(isOverdue),
+    }));
+
+    if (groupMode === "date") {
+      entries.sort((a, b) => {
+        const da = parseDate(a.label);
+        const db = parseDate(b.label);
         if (!da || !db) return 0;
         return db.getTime() - da.getTime();
       });
-  }, [orders]);
+    } else {
+      entries.sort((a, b) => a.label.localeCompare(b.label, "he"));
+    }
+
+    return entries;
+  }, [orders, groupMode]);
 
   return (
     <div>
@@ -198,7 +223,33 @@ export function OpenOrders() {
             <Badge variant="outline">{orders.length}</Badge>
           )}
         </div>
-        <AddOrderDialog />
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 p-1 rounded-lg bg-muted">
+            <button
+              onClick={() => setGroupMode("date")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                groupMode === "date"
+                  ? "bg-white text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              לפי תאריך
+            </button>
+            <button
+              onClick={() => setGroupMode("product")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                groupMode === "product"
+                  ? "bg-white text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Package className="h-3.5 w-3.5" />
+              לפי מוצר
+            </button>
+          </div>
+          <AddOrderDialog />
+        </div>
       </div>
 
       {/* States */}
@@ -220,7 +271,7 @@ export function OpenOrders() {
       {!isLoading && !error && groups.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {groups.map((group) => (
-            <DateCard key={group.orderDate} group={group} />
+            <OrderGroupCard key={group.label} group={group} mode={groupMode} />
           ))}
         </div>
       )}
