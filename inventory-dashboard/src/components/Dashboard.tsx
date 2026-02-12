@@ -11,7 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +32,11 @@ function DashboardContent() {
 
   const { data: items, isLoading, error } = useInventoryOverview();
   const syncMutation = useSyncMissingProducts();
+
+  const handleNavigateToOrders = useCallback((productName: string) => {
+    setSearch(productName);
+    setActiveTab("orders");
+  }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -216,6 +221,7 @@ function DashboardContent() {
                       productName={item.productName}
                       currentStock={item.currentStock}
                       onTheWay={item.onTheWay}
+                      onOrdersClick={handleNavigateToOrders}
                     />
                   ))}
                 </div>
@@ -225,7 +231,7 @@ function DashboardContent() {
         )}
 
         {activeTab === "orders" && (
-          <OpenOrders />
+          <OpenOrders search={search} />
         )}
 
         <footer className="text-center text-xs text-muted-foreground pb-4">

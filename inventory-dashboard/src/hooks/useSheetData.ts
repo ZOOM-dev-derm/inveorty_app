@@ -135,10 +135,18 @@ export function useProductForecast(sku: string, currentStock: number) {
       console.debug(`[Forecast] SKU ${sku}: raw orders:`, rawSkuOrders.map(o => ({ dermaSku: o.dermaSku, received: o.received, qty: o.quantity, expected: o.expectedDate })));
       const skuOrders = rawSkuOrders
         .filter((o) => !RECEIVED_VALUES.includes((o.received || "").toString().trim().toLowerCase()))
-        .map((o) => ({
-          qty: parseInt(o.quantity, 10) || 0,
-          expectedDate: parseDate(o.expectedDate),
-        }))
+        .map((o) => {
+          let expectedDate = parseDate(o.expectedDate);
+          // Fallback: estimate as order date + 3 months
+          if (!expectedDate) {
+            const orderDate = parseDate(o.orderDate);
+            if (orderDate) {
+              expectedDate = new Date(orderDate);
+              expectedDate.setMonth(expectedDate.getMonth() + 3);
+            }
+          }
+          return { qty: parseInt(o.quantity, 10) || 0, expectedDate };
+        })
         .filter((o) => o.expectedDate !== null)
         .sort((a, b) => a.expectedDate!.getTime() - b.expectedDate!.getTime());
       console.debug(`[Forecast] SKU ${sku}: ${skuOrders.length} open orders after filtering`, skuOrders);
@@ -218,10 +226,18 @@ export function useProductForecast(sku: string, currentStock: number) {
       const skuOrders = orders
         .filter((o) => o.dermaSku === sku)
         .filter((o) => !RECEIVED_VALUES.includes((o.received || "").toString().trim().toLowerCase()))
-        .map((o) => ({
-          qty: parseInt(o.quantity, 10) || 0,
-          expectedDate: parseDate(o.expectedDate),
-        }))
+        .map((o) => {
+          let expectedDate = parseDate(o.expectedDate);
+          // Fallback: estimate as order date + 3 months
+          if (!expectedDate) {
+            const orderDate = parseDate(o.orderDate);
+            if (orderDate) {
+              expectedDate = new Date(orderDate);
+              expectedDate.setMonth(expectedDate.getMonth() + 3);
+            }
+          }
+          return { qty: parseInt(o.quantity, 10) || 0, expectedDate };
+        })
         .filter((o) => o.expectedDate !== null)
         .sort((a, b) => a.expectedDate!.getTime() - b.expectedDate!.getTime());
 

@@ -66,7 +66,7 @@ function OrderItem({ order, index, mode }: { order: Order; index: number; mode: 
 
   return (
     <div
-      className="order-detail flex items-center justify-between gap-3 py-2 border-b border-border/30 last:border-0"
+      className="order-detail flex items-center justify-between gap-3 py-3 border-b border-border/20 last:border-0"
       style={{
         opacity: 0,
         transform: "translateY(8px)",
@@ -76,19 +76,25 @@ function OrderItem({ order, index, mode }: { order: Order; index: number; mode: 
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
         {mode === "date" ? (
-          <>
-            <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <span className="text-sm font-medium truncate">{order.productName}</span>
-          </>
+          <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5 self-start" />
         ) : (
-          <>
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <span className="text-sm font-medium truncate">{order.orderDate || "לא ידוע"}</span>
-          </>
+          <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5 self-start" />
         )}
-        <Badge variant="outline" className="text-xs shrink-0">
-          {order.quantity}
-        </Badge>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-2">
+            <span className="text-sm font-medium leading-snug">
+              {mode === "date" ? order.productName : (order.orderDate || "לא ידוע")}
+            </span>
+            <Badge variant="outline" className="text-xs shrink-0 bg-muted/50">
+              {order.quantity}
+            </Badge>
+          </div>
+          {(order.dermaSku || order.supplierSku) && (
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              {[order.dermaSku, order.supplierSku].filter(Boolean).join(" | ")}
+            </div>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         {expectedDate && (
@@ -175,15 +181,25 @@ function OrderGroupCard({ group, mode }: { group: OrderGroup; mode: GroupMode })
   );
 }
 
-export function OpenOrders() {
+export function OpenOrders({ search }: { search: string }) {
   const { data: orders, isLoading, error } = useOpenOrders();
   const [groupMode, setGroupMode] = useState<GroupMode>("date");
 
   const groups = useMemo<OrderGroup[]>(() => {
     if (!orders) return [];
+
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? orders.filter(
+          (o) =>
+            o.productName.toLowerCase().includes(q) ||
+            o.orderDate.toLowerCase().includes(q)
+        )
+      : orders;
+
     const map = new Map<string, Order[]>();
 
-    for (const order of orders) {
+    for (const order of filtered) {
       const key =
         groupMode === "date"
           ? order.orderDate || "לא ידוע"
@@ -198,19 +214,22 @@ export function OpenOrders() {
       hasOverdue: ords.some(isOverdue),
     }));
 
-    if (groupMode === "date") {
-      entries.sort((a, b) => {
+    entries.sort((a, b) => {
+      // Overdue groups first
+      if (a.hasOverdue !== b.hasOverdue) return a.hasOverdue ? -1 : 1;
+      // Then by date or name
+      if (groupMode === "date") {
         const da = parseDate(a.label);
         const db = parseDate(b.label);
         if (!da || !db) return 0;
         return db.getTime() - da.getTime();
-      });
-    } else {
-      entries.sort((a, b) => a.label.localeCompare(b.label, "he"));
-    }
+      } else {
+        return a.label.localeCompare(b.label, "he");
+      }
+    });
 
     return entries;
-  }, [orders, groupMode]);
+  }, [orders, groupMode, search]);
 
   return (
     <div>
@@ -263,7 +282,7 @@ export function OpenOrders() {
       )}
       {!isLoading && !error && groups.length === 0 && (
         <p className="text-muted-foreground text-sm text-center py-8">
-          אין הזמנות פתוחות
+          {search.trim() ? "לא נמצאו הזמנות תואמות" : "אין הזמנות פתוחות"}
         </p>
       )}
 

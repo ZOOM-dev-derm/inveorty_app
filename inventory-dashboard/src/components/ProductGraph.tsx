@@ -20,9 +20,10 @@ interface ProductGraphProps {
   productName: string;
   currentStock: number;
   onTheWay: number;
+  onOrdersClick?: (productName: string) => void;
 }
 
-export function ProductGraph({ sku, productName, currentStock, onTheWay }: ProductGraphProps) {
+export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrdersClick }: ProductGraphProps) {
   const { chartData, declineRate, minAmount, realRate, minRate, isLoading, error } = useProductForecast(sku, currentStock);
 
   const [brushRange, setBrushRange] = useState<{ startIndex: number; endIndex: number } | undefined>();
@@ -81,7 +82,11 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay }: Produ
           <CardTitle className="text-sm font-semibold truncate flex-1">{productName}</CardTitle>
           <div className="flex items-center gap-1.5 shrink-0">
             {onTheWay > 0 && (
-              <Badge variant="outline" className="text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200">
+              <Badge
+                variant="outline"
+                className="text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
+                onClick={() => onOrdersClick?.(productName)}
+              >
                 <Truck className="h-3 w-3" />
                 {onTheWay} בדרך
               </Badge>
