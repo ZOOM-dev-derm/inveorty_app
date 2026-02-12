@@ -94,6 +94,9 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
             <Badge
               variant={isDecline ? "destructive" : isGrowth ? "default" : "secondary"}
               className="text-xs gap-1"
+              title={minAmount !== null
+                ? `מינימום חודשי: הכמות המינימלית (${minAmount}) חלקי 6 חודשים`
+                : "קצב שינוי חודשי מחושב מנתוני היסטוריה"}
             >
               {isDecline ? (
                 <TrendingDown className="h-3 w-3" />
@@ -103,6 +106,13 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
                 <Minus className="h-3 w-3" />
               )}
               {Math.abs(ratePerMonth)}/חודש
+            </Badge>
+            <Badge
+              variant="outline"
+              className="text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200"
+              title="קצב בפועל: חושב מנתוני היסטוריה באמצעות רגרסיה לינארית"
+            >
+              {Math.abs(realRatePerMonth)}/חודש
             </Badge>
           </div>
         </div>
@@ -121,7 +131,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
               variant="outline"
               className={`text-[10px] px-1.5 py-0 ${realFasterThanMin ? "bg-red-50 text-red-700 border-red-200" : "bg-green-50 text-green-700 border-green-200"}`}
             >
-              {realFasterThanMin ? "מהיר מהמינימום" : "איטי מהמינימום"}
+              {realFasterThanMin ? "קצב בפועל מהיר מתחזית" : "קצב בפועל איטי מתחזית"}
             </Badge>
           </div>
         )}
