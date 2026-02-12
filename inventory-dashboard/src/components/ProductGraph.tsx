@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   AreaChart,
   Area,
@@ -8,12 +8,12 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceDot,
   Brush,
 } from "recharts";
 import { useProductForecast } from "@/hooks/useSheetData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { TrendingDown, TrendingUp, Minus, Truck } from "lucide-react";
+import { TrendingDown, TrendingUp, Minus, Truck, AlertCircle } from "lucide-react";
 
 interface ProductGraphProps {
   sku: string;
@@ -49,14 +49,20 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
   // Real decline is faster (more negative) than min-based rate
   const realFasterThanMin = minAmount !== null && realRate < minRate;
 
+  // Find critical point — first forecast point that drops to <= 5 units
+  const criticalPoint = useMemo(() => {
+    const fp = chartData.filter(p => p.forecast !== null && p.forecast !== undefined && p.forecast <= 5 && p.quantity === null);
+    return fp.length > 0 ? fp[0] : null;
+  }, [chartData]);
+
   if (isLoading) {
     return (
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden shadow-sm border-border/60">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium truncate">{productName}</CardTitle>
+          <CardTitle className="text-sm font-semibold truncate">{productName}</CardTitle>
         </CardHeader>
         <CardContent className="h-48 flex items-center justify-center">
-          <div className="animate-pulse text-muted-foreground text-sm">טוען נתונים...</div>
+          <div className="animate-pulse text-muted-foreground text-sm font-medium">טוען נתונים...</div>
         </CardContent>
       </Card>
     );
@@ -64,9 +70,9 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
 
   if (error || chartData.length === 0) {
     return (
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden shadow-sm border-border/60">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium truncate">{productName}</CardTitle>
+          <CardTitle className="text-sm font-semibold truncate">{productName}</CardTitle>
         </CardHeader>
         <CardContent className="h-48 flex items-center justify-center">
           <div className="text-muted-foreground text-sm">אין מספיק נתוני היסטוריה</div>
@@ -76,63 +82,78 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
   }
 
   return (
-    <Card className="overflow-hidden transition-shadow hover:shadow-lg">
-      <CardHeader className="pb-2 space-y-1">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-semibold truncate flex-1">{productName}</CardTitle>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {onTheWay > 0 && (
-              <Badge
-                variant="outline"
-                className="text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
-                onClick={() => onOrdersClick?.(productName)}
-              >
-                <Truck className="h-3 w-3" />
-                {onTheWay} בדרך
-              </Badge>
-            )}
-            <Badge
-              variant={isDecline ? "destructive" : isGrowth ? "default" : "secondary"}
-              className="text-xs gap-1"
-              title={minAmount !== null
-                ? `מינימום חודשי: הכמות המינימלית (${minAmount}) חלקי 6 חודשים`
-                : "קצב שינוי חודשי מחושב מנתוני היסטוריה"}
-            >
-              {isDecline ? (
-                <TrendingDown className="h-3 w-3" />
-              ) : isGrowth ? (
-                <TrendingUp className="h-3 w-3" />
-              ) : (
-                <Minus className="h-3 w-3" />
-              )}
-              {Math.abs(ratePerMonth)}/חודש
-            </Badge>
-            <Badge
-              variant="outline"
-              className="text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200"
-              title="קצב בפועל: חושב מנתוני היסטוריה באמצעות רגרסיה לינארית"
-            >
-              {Math.abs(realRatePerMonth)}/חודש
-            </Badge>
+    <Card className="overflow-hidden transition-all hover:shadow-lg hover:border-primary/30 border-border/60 shadow-sm">
+      <CardHeader className="pb-3 space-y-2 bg-gradient-to-b from-muted/20 to-transparent">
+        {/* Primary Info — Product Name + Current Stock */}
+        <div className="space-y-1">
+          <CardTitle className="text-lg font-bold text-foreground leading-tight">{productName}</CardTitle>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-primary">{currentStock}</span>
+            <span className="text-sm font-medium text-muted-foreground">יחידות במלאי</span>
           </div>
         </div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span>מלאי נוכחי: <strong className="text-foreground">{currentStock}</strong></span>
-          <span className="text-muted-foreground/50">|</span>
-          <span>מק״ט: {sku}</span>
+
+        {/* SKU */}
+        <div className="text-xs text-muted-foreground font-medium">
+          מק״ט: {sku}
         </div>
-        {minAmount !== null && (
-          <div className="flex items-center gap-2 text-xs">
-            <span className={realFasterThanMin ? "text-red-600" : "text-green-600"}>
-              קצב ירידה: {Math.abs(realRatePerMonth)}/חודש
-              {" "}(מינימום: {Math.abs(minRatePerMonth)}/חודש)
-            </span>
-            <Badge
-              variant="outline"
-              className={`text-[10px] px-1.5 py-0 ${realFasterThanMin ? "bg-red-50 text-red-700 border-red-200" : "bg-green-50 text-green-700 border-green-200"}`}
+
+        {/* Status Chips Row */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Rate Chip */}
+          <span
+            className={`status-chip ${isDecline ? "chip-decline" : isGrowth ? "chip-growth" : "chip-stable"}`}
+            title={minAmount !== null
+              ? `מינימום חודשי: הכמות המינימלית (${minAmount}) חלקי 6 חודשים`
+              : "קצב שינוי חודשי מחושב מנתוני היסטוריה"}
+          >
+            {isDecline ? (
+              <TrendingDown className="h-3 w-3" />
+            ) : isGrowth ? (
+              <TrendingUp className="h-3 w-3" />
+            ) : (
+              <Minus className="h-3 w-3" />
+            )}
+            <span className="font-semibold">{Math.abs(ratePerMonth)}</span>/חודש
+          </span>
+
+          {/* Real Rate Chip */}
+          <span
+            className="status-chip chip-info"
+            title="קצב בפועל: חושב מנתוני היסטוריה באמצעות רגרסיה לינארית"
+          >
+            <span className="font-semibold">{Math.abs(realRatePerMonth)}</span>/חודש בפועל
+          </span>
+
+          {/* On The Way Chip */}
+          {onTheWay > 0 && (
+            <span
+              className="status-chip chip-ontheway"
+              onClick={() => onOrdersClick?.(productName)}
             >
-              {realFasterThanMin ? "קצב בפועל מהיר מתחזית" : "קצב בפועל איטי מתחזית"}
-            </Badge>
+              <Truck className="h-3 w-3" />
+              <span className="font-semibold">{onTheWay}</span> בדרך
+            </span>
+          )}
+
+          {/* Critical Point Alert Chip */}
+          {criticalPoint && (
+            <span className="status-chip chip-alert">
+              <AlertCircle className="h-3 w-3" />
+              <span className="font-semibold">זמן להזמנה</span>
+            </span>
+          )}
+        </div>
+
+        {/* Rate Comparison */}
+        {minAmount !== null && (
+          <div className="text-[11px] pt-1">
+            <span className={realFasterThanMin ? "text-rose-700 font-medium" : "text-emerald-700 font-medium"}>
+              {realFasterThanMin ? "⚠ " : "✓ "}
+              קצב בפועל: {Math.abs(realRatePerMonth)}/חודש
+              {" "}· מינימום: {Math.abs(minRatePerMonth)}/חודש
+              {" "}· {realFasterThanMin ? "קצב בפועל מהיר מתחזית" : "קצב בפועל איטי מתחזית"}
+            </span>
           </div>
         )}
       </CardHeader>
@@ -141,43 +162,44 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={chartData}
-              margin={{ top: 10, right: 16, left: 0, bottom: 5 }}
+              margin={{ top: 15, right: 16, left: 0, bottom: 5 }}
             >
               <defs>
                 <linearGradient id={`gradient-actual-${sku}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="oklch(0.6 0.118 184.704)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="oklch(0.6 0.118 184.704)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="oklch(0.55 0.13 200)" stopOpacity={0.35} />
+                  <stop offset="95%" stopColor="oklch(0.55 0.13 200)" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id={`gradient-forecast-${sku}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="oklch(0.646 0.222 41.116)" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="oklch(0.646 0.222 41.116)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="oklch(0.65 0.15 30)" stopOpacity={0.1} />
+                  <stop offset="95%" stopColor="oklch(0.65 0.15 30)" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id={`gradient-order-${sku}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="oklch(0.623 0.214 259.815)" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="oklch(0.623 0.214 259.815)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="oklch(0.55 0.15 280)" stopOpacity={0.12} />
+                  <stop offset="95%" stopColor="oklch(0.55 0.15 280)" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+              <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.9 0.01 30)" opacity={0.4} />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 10, fontFamily: "Heebo" }}
                 tickLine={false}
                 axisLine={false}
                 interval="preserveStartEnd"
               />
               <YAxis
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 10, fontFamily: "Heebo" }}
                 tickLine={false}
                 axisLine={false}
                 width={35}
               />
               <Tooltip
                 contentStyle={{
-                  borderRadius: "8px",
-                  border: "1px solid oklch(0.922 0 0)",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                  borderRadius: "12px",
+                  border: "1px solid oklch(0.9 0.01 30)",
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
                   fontSize: "12px",
                   direction: "rtl",
+                  fontFamily: "Heebo",
                 }}
                 formatter={(value: number | undefined, name: string | undefined) => {
                   const labels: Record<string, string> = {
@@ -192,58 +214,80 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
               />
               <ReferenceLine
                 y={15}
-                stroke="oklch(0.577 0.245 27.325)"
+                stroke="oklch(0.62 0.19 25)"
                 strokeDasharray="4 4"
                 strokeWidth={1.5}
-                label={{ value: "מלאי נמוך", position: "insideTopRight", fontSize: 10, fill: "oklch(0.577 0.245 27.325)" }}
+                label={{ value: "מלאי נמוך", position: "insideTopRight", fontSize: 10, fill: "oklch(0.62 0.19 25)", fontFamily: "Heebo", fontWeight: 600 }}
               />
               {minAmount !== null && (
                 <ReferenceLine
                   y={minAmount}
-                  stroke="oklch(0.55 0.2 280)"
+                  stroke="oklch(0.55 0.15 280)"
                   strokeDasharray="6 3"
                   strokeWidth={1.5}
-                  label={{ value: "מינימום", position: "insideTopLeft", fontSize: 10, fill: "oklch(0.55 0.2 280)" }}
+                  label={{ value: "מינימום", position: "insideTopLeft", fontSize: 10, fill: "oklch(0.55 0.15 280)", fontFamily: "Heebo", fontWeight: 600 }}
                 />
               )}
-              {/* Actual inventory */}
+              {/* Critical Point Marker */}
+              {criticalPoint && (
+                <ReferenceDot
+                  x={criticalPoint.date}
+                  y={criticalPoint.forecast ?? 0}
+                  r={6}
+                  fill="oklch(0.62 0.19 25)"
+                  stroke="white"
+                  strokeWidth={2}
+                  label={{
+                    value: "⚠ זמן להזמנה",
+                    position: "top",
+                    fontSize: 11,
+                    fill: "oklch(0.55 0.18 25)",
+                    fontFamily: "Heebo",
+                    fontWeight: 700,
+                    offset: 12,
+                  }}
+                />
+              )}
+              {/* Actual inventory — prominent solid line with dots */}
               <Area
                 type="monotone"
                 dataKey="quantity"
-                stroke="oklch(0.6 0.118 184.704)"
+                stroke="oklch(0.55 0.13 200)"
                 strokeWidth={2.5}
                 fill={`url(#gradient-actual-${sku})`}
                 connectNulls={false}
-                dot={{ r: 3, fill: "oklch(0.6 0.118 184.704)" }}
-                activeDot={{ r: 5 }}
+                dot={{ r: 3, fill: "oklch(0.55 0.13 200)", strokeWidth: 0 }}
+                activeDot={{ r: 6, fill: "oklch(0.55 0.13 200)", stroke: "white", strokeWidth: 2 }}
               />
-              {/* Forecast */}
+              {/* Forecast — softer dashed line, no dots */}
               <Area
                 type="monotone"
                 dataKey="forecast"
-                stroke="oklch(0.646 0.222 41.116)"
+                stroke="oklch(0.65 0.15 30)"
                 strokeWidth={2}
                 strokeDasharray="6 3"
                 fill={`url(#gradient-forecast-${sku})`}
                 connectNulls={true}
-                dot={{ r: 2, fill: "oklch(0.646 0.222 41.116)" }}
+                dot={false}
+                activeDot={{ r: 5, fill: "oklch(0.65 0.15 30)", stroke: "white", strokeWidth: 2 }}
               />
-              {/* On the way (forecast + orders) */}
+              {/* On the way — subtle dashed line, no dots */}
               <Area
                 type="monotone"
                 dataKey="onTheWay"
-                stroke="oklch(0.623 0.214 259.815)"
-                strokeWidth={2}
+                stroke="oklch(0.55 0.15 280)"
+                strokeWidth={1.5}
                 strokeDasharray="4 4"
                 fill={`url(#gradient-order-${sku})`}
                 connectNulls={true}
-                dot={{ r: 2, fill: "oklch(0.623 0.214 259.815)" }}
+                dot={false}
+                activeDot={{ r: 5, fill: "oklch(0.55 0.15 280)", stroke: "white", strokeWidth: 2 }}
               />
               <Brush
                 dataKey="date"
-                height={30}
-                stroke="oklch(0.7 0.05 260)"
-                fill="oklch(0.97 0.005 260)"
+                height={28}
+                stroke="oklch(0.45 0.1 340)"
+                fill="oklch(0.955 0.008 30)"
                 travellerWidth={8}
                 startIndex={brushRange?.startIndex}
                 endIndex={brushRange?.endIndex}
@@ -253,24 +297,24 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
           </ResponsiveContainer>
         </div>
         {/* Legend */}
-        <div className="flex items-center justify-center gap-4 pb-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-0.5 rounded" style={{ backgroundColor: "oklch(0.6 0.118 184.704)" }} />
+        <div className="flex items-center justify-center gap-5 pb-4 pt-2 text-xs text-muted-foreground font-medium">
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "oklch(0.55 0.13 200)" }} />
             מלאי בפועל
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-0.5 rounded border-dashed" style={{ backgroundColor: "oklch(0.646 0.222 41.116)" }} />
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "oklch(0.65 0.15 30)" }} />
             תחזית
           </span>
           {onTheWay > 0 && (
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-0.5 rounded" style={{ backgroundColor: "oklch(0.623 0.214 259.815)" }} />
+            <span className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "oklch(0.55 0.15 280)" }} />
               עם הזמנות
             </span>
           )}
           {minAmount !== null && (
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-0.5 rounded border-dashed" style={{ backgroundColor: "oklch(0.55 0.2 280)" }} />
+            <span className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "oklch(0.55 0.15 280)" }} />
               מינימום
             </span>
           )}

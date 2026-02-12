@@ -137,22 +137,22 @@ function OrderGroupCard({ group, mode }: { group: OrderGroup; mode: GroupMode })
 
   return (
     <div
-      className={`group relative rounded-xl border-2 p-4 transition-all duration-300 cursor-default
+      className={`group relative rounded-xl border-2 p-4 transition-all duration-300 cursor-default shadow-sm
         ${
           group.hasOverdue
-            ? "border-destructive/40 bg-gradient-to-br from-red-50/80 to-white hover:border-destructive/60 hover:shadow-lg hover:shadow-red-100/50"
-            : "border-border/50 bg-gradient-to-br from-white to-slate-50/50 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+            ? "border-destructive/40 bg-gradient-to-br from-rose-50/50 via-white to-pink-50/30 hover:border-destructive/60 hover:shadow-lg hover:shadow-red-100/50"
+            : "border-border/50 bg-gradient-to-br from-white via-background to-slate-50/30 hover:border-primary/30 hover:shadow-md"
         }`}
     >
       {/* Default state — always visible */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className={`p-2 rounded-lg ${group.hasOverdue ? "bg-destructive/10" : "bg-primary/10"}`}>
+          <div className={`p-2 rounded-xl ${group.hasOverdue ? "bg-destructive/10 ring-1 ring-destructive/20" : "bg-primary/10 ring-1 ring-primary/20"}`}>
             <Icon className={`h-4 w-4 ${group.hasOverdue ? "text-destructive" : "text-primary"}`} />
           </div>
           <div>
             <div className="font-bold text-base">{group.label}</div>
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
+            <div className="text-xs text-muted-foreground font-medium flex items-center gap-1">
               <Package className="h-3 w-3" />
               {group.orders.length} פריטים
             </div>

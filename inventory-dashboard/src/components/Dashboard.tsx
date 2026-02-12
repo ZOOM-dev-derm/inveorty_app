@@ -60,18 +60,18 @@ function DashboardContent() {
   const lowStockCount = items?.filter((i) => i.currentStock < 15).length ?? 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50/30 via-background to-purple-50/20" dir="rtl">
       {/* Header */}
-      <header className="sticky top-0 z-10 backdrop-blur-md bg-white/80 border-b border-border/50">
-        <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-4">
+      <header className="sticky top-0 z-10 backdrop-blur-xl bg-background/90 border-b border-border/50 shadow-sm">
+        <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-primary/10">
-                <Package className="h-6 w-6 text-primary" />
+            <div className="flex items-center gap-4">
+              <div className="p-2.5 rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+                <Package className="h-7 w-7 text-primary" />
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight">דשבורד מלאי והזמנות</h1>
-                <p className="text-xs text-muted-foreground">ניתוח מגמות ותחזית מלאי</p>
+                <h1 className="text-2xl font-bold tracking-tight">דשבורד מלאי והזמנות</h1>
+                <p className="text-xs text-muted-foreground font-medium mt-0.5">ניתוח מגמות ותחזית מלאי · Dermalosophy</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -82,7 +82,7 @@ function DashboardContent() {
                 size="sm"
                 onClick={() => syncMutation.mutate()}
                 disabled={syncMutation.isPending}
-                className="gap-2"
+                className="gap-2 font-medium"
               >
                 {syncMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -96,7 +96,7 @@ function DashboardContent() {
                 size="sm"
                 onClick={handleRefresh}
                 disabled={refreshing}
-                className="gap-2"
+                className="gap-2 font-medium"
               >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
                 רענן
@@ -109,32 +109,32 @@ function DashboardContent() {
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-6 space-y-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className="text-xs text-emerald-600 font-medium">סה״כ מוצרים</div>
-              <div className="text-2xl font-bold text-emerald-700 mt-1">{items?.length ?? "—"}</div>
+          <Card className="bg-gradient-to-br from-emerald-50/50 via-white to-emerald-50/30 border-emerald-200/40 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="pt-5 pb-4 px-5">
+              <div className="text-xs text-emerald-700 font-semibold">סה״כ מוצרים</div>
+              <div className="text-3xl font-bold text-emerald-800 mt-1">{items?.length ?? "—"}</div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-100">
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className="text-xs text-blue-600 font-medium">סה״כ מלאי</div>
-              <div className="text-2xl font-bold text-blue-700 mt-1">{totalStock.toLocaleString()}</div>
+          <Card className="bg-gradient-to-br from-blue-50/50 via-white to-cyan-50/30 border-blue-200/40 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="pt-5 pb-4 px-5">
+              <div className="text-xs text-blue-700 font-semibold">סה״כ מלאי</div>
+              <div className="text-3xl font-bold text-blue-800 mt-1">{totalStock.toLocaleString()}</div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-violet-50 to-white border-violet-100">
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className="text-xs text-violet-600 font-medium flex items-center gap-1">
-                <ShoppingCart className="h-3 w-3" /> בדרך
+          <Card className="bg-gradient-to-br from-purple-50/50 via-white to-purple-50/30 border-purple-200/40 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="pt-5 pb-4 px-5">
+              <div className="text-xs text-purple-700 font-semibold flex items-center gap-1.5">
+                <ShoppingCart className="h-3.5 w-3.5" /> בדרך
               </div>
-              <div className="text-2xl font-bold text-violet-700 mt-1">{productsOnTheWay}</div>
+              <div className="text-3xl font-bold text-purple-800 mt-1">{productsOnTheWay}</div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-100">
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className="text-xs text-amber-600 font-medium flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" /> מלאי נמוך
+          <Card className="bg-gradient-to-br from-rose-50/50 via-white to-pink-50/30 border-rose-200/40 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="pt-5 pb-4 px-5">
+              <div className="text-xs text-rose-700 font-semibold flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" /> מלאי נמוך
               </div>
-              <div className="text-2xl font-bold text-amber-700 mt-1">{lowStockCount}</div>
+              <div className="text-3xl font-bold text-rose-800 mt-1">{lowStockCount}</div>
             </CardContent>
           </Card>
         </div>
@@ -148,16 +148,16 @@ function DashboardContent() {
               placeholder="חפש מוצר לפי שם או מק״ט..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-10 pr-10 pl-4 rounded-lg border border-input bg-white text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
+              className="w-full h-11 pr-10 pl-4 rounded-xl border border-input bg-white text-sm font-medium placeholder:text-muted-foreground placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
             />
           </div>
-          <div className="flex gap-1 p-1 rounded-lg bg-muted">
+          <div className="flex gap-1 p-1 rounded-xl bg-muted/80 shadow-inner">
             <button
               onClick={() => setActiveTab("graphs")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                 activeTab === "graphs"
-                  ? "bg-white text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/50"
               }`}
             >
               <BarChart3 className="h-4 w-4" />
@@ -165,10 +165,10 @@ function DashboardContent() {
             </button>
             <button
               onClick={() => setActiveTab("orders")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                 activeTab === "orders"
-                  ? "bg-white text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/50"
               }`}
             >
               <ShoppingCart className="h-4 w-4" />
