@@ -454,7 +454,9 @@ export function useUpdateOrderComments() {
       }
     },
     onSettled: () => {
-      client.invalidateQueries({ queryKey: ["orders"] });
+      setTimeout(() => {
+        client.invalidateQueries({ queryKey: ["orders"] });
+      }, 5000);
     },
   });
 }
