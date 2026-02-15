@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { fetchInventory, fetchProducts, fetchOrders, fetchHistory, fetchMinAmount, addProduct, addOrder, updateOrderStatus, syncMissingProducts } from "@/services/googleSheets";
+import { fetchInventory, fetchProducts, fetchOrders, fetchHistory, fetchMinAmount, addProduct, addOrder, updateOrderStatus, updateOrderComments, syncMissingProducts } from "@/services/googleSheets";
 import type { InventoryItem, Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint, MinAmountItem } from "@/types";
 
 const FIVE_MINUTES = 5 * 60 * 1000;
@@ -321,7 +321,9 @@ export function useCriticalDates(items: InventoryOverviewItem[]) {
 
   return useMemo(() => {
     const dateMap = new Map<string, Date | null>();
-    if (!history || !items.length) return dateMap;
+    if (!items.length) return dateMap;
+
+    const RECEIVED_VALUES = ["כן", "v", "✓", "true", "yes"];
 
     for (const item of items) {
       const minEntry = minAmountData?.find(m => m.sku === item.sku);
@@ -333,15 +335,64 @@ export function useCriticalDates(items: InventoryOverviewItem[]) {
 
       if (forecastSlope >= 0) { dateMap.set(item.sku, null); continue; }
 
-      // Days from today until stock hits minAmount
-      const daysToMin = (item.currentStock - minAmt) / Math.abs(forecastSlope);
-      if (daysToMin <= 0) {
-        dateMap.set(item.sku, new Date()); // already below min
-      } else {
-        const critDate = new Date();
-        critDate.setDate(critDate.getDate() + Math.round(daysToMin));
-        dateMap.set(item.sku, critDate);
+      // Get open orders for this SKU
+      const skuOrders = (orders ?? [])
+        .filter(o => o.dermaSku === item.sku)
+        .filter(o => !RECEIVED_VALUES.includes((o.received || "").toString().trim().toLowerCase()))
+        .map(o => {
+          let expectedDate = parseDate(o.expectedDate);
+          if (!expectedDate) {
+            const orderDate = parseDate(o.orderDate);
+            if (orderDate) {
+              expectedDate = new Date(orderDate);
+              expectedDate.setMonth(expectedDate.getMonth() + 3);
+            }
+          }
+          return { qty: parseInt(o.quantity, 10) || 0, expectedDate };
+        })
+        .filter(o => o.expectedDate !== null)
+        .sort((a, b) => a.expectedDate!.getTime() - b.expectedDate!.getTime());
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Add overdue orders to starting quantity
+      let overdueQty = 0;
+      for (const order of skuOrders) {
+        if (order.expectedDate! <= today) overdueQty += order.qty;
       }
+      let running = item.currentStock + overdueQty;
+
+      // Already below min?
+      if (running <= minAmt) {
+        dateMap.set(item.sku, new Date());
+        continue;
+      }
+
+      // Step through 26 weeks (matching the graph forecast)
+      let found = false;
+      for (let i = 1; i <= 26; i++) {
+        const prevDate = new Date(today);
+        prevDate.setDate(prevDate.getDate() + (i - 1) * 7);
+        const futureDate = new Date(today);
+        futureDate.setDate(futureDate.getDate() + i * 7);
+
+        running = running + forecastSlope * 7;
+
+        // Add orders arriving in this week
+        for (const order of skuOrders) {
+          if (order.expectedDate! > prevDate && order.expectedDate! <= futureDate) {
+            running += order.qty;
+          }
+        }
+
+        if (running <= minAmt) {
+          dateMap.set(item.sku, futureDate);
+          found = true;
+          break;
+        }
+      }
+      if (!found) dateMap.set(item.sku, null);
     }
     return dateMap;
   }, [items, history, orders, minAmountData]);
@@ -374,6 +425,35 @@ export function useUpdateOrderStatus() {
   return useMutation({
     mutationFn: (data: { rowIndex: number; received: boolean }) => updateOrderStatus(data.rowIndex, data.received),
     onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+}
+
+export function useUpdateOrderComments() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { rowIndex: number; comments: string }) => updateOrderComments(data.rowIndex, data.comments),
+    onMutate: async (data) => {
+      await client.cancelQueries({ queryKey: ["orders"] });
+      const previous = client.getQueryData<Order[]>(["orders"]);
+      if (previous) {
+        client.setQueryData<Order[]>(["orders"], (old) =>
+          old?.map((order) =>
+            order.rowIndex === data.rowIndex
+              ? { ...order, comments: data.comments }
+              : order
+          )
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _data, context) => {
+      if (context?.previous) {
+        client.setQueryData(["orders"], context.previous);
+      }
+    },
+    onSettled: () => {
       client.invalidateQueries({ queryKey: ["orders"] });
     },
   });

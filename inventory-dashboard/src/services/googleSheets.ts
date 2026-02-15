@@ -101,8 +101,9 @@ export async function fetchOrders(): Promise<Order[]> {
   const qtyKey = cols.find((k) => k.includes("כמות")) ?? "כמות סה\"כ";
   const receivedKey = cols.find((k) => k.includes("התקבל")) ?? "התקבל";
   const expectedKey = cols.find((k) => k.includes("צפי")) ?? "תאריך צפי";
+  const logKey = cols.find((k) => k.includes("לוג")) ?? "לוג";
 
-  console.debug("[fetchOrders] detected columns:", { dermaSkuKey, qtyKey, receivedKey, expectedKey });
+  console.debug("[fetchOrders] detected columns:", { dermaSkuKey, qtyKey, receivedKey, expectedKey, logKey });
 
   return raw
     .filter((row) => row["שם פריט"]?.trim())
@@ -127,6 +128,7 @@ export async function fetchOrders(): Promise<Order[]> {
         productName: row["שם פריט"]?.trim() ?? "",
         received: row[receivedKey]?.trim() ?? "",
         expectedDate,
+        comments: row[logKey]?.trim() ?? "",
         rowIndex: idx + 2, // 1-based, +1 for header row, +1 for 0-index
       };
     });
@@ -171,6 +173,10 @@ export async function addOrder(data: {
 
 export async function updateOrderStatus(rowIndex: number, received: boolean) {
   return postToSheet("updateOrderStatus", { rowIndex, received });
+}
+
+export async function updateOrderComments(rowIndex: number, comments: string) {
+  return postToSheet("updateOrderComments", { rowIndex, comments });
 }
 
 export async function syncMissingProducts() {

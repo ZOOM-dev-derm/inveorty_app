@@ -51,13 +51,50 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
   // Real decline is faster (more negative) than min-based rate
   const realFasterThanMin = minAmount !== null && realRate < minRate;
 
-  // Find critical point — first forecast point that drops to <= minAmount
+  // Find critical point — when stock drops to <= minAmount
+  // When orders exist, use the onTheWay line and find where it drops below
+  // minAmount AFTER the last order spike (the final descent)
   const criticalPoint = useMemo(() => {
     if (minAmount === null) return null;
-    const fp = chartData.filter(
-      p => p.forecast !== null && p.forecast !== undefined && p.forecast <= minAmount && p.quantity === null
-    );
-    return fp.length > 0 ? fp[0] : null;
+    const hasOrders = chartData.some(p => p.onTheWay !== null);
+    const forecastPoints = chartData.filter(p => p.quantity === null);
+
+    if (!hasOrders) {
+      // No orders — first forecast point that drops to <= minAmount
+      const fp = forecastPoints.filter(
+        p => p.forecast !== null && p.forecast !== undefined && p.forecast <= minAmount
+      );
+      return fp.length > 0 ? fp[0] : null;
+    }
+
+    // With orders: find the LAST point where onTheWay > minAmount,
+    // then the critical point is the next one (the final descent below minAmount)
+    let lastAboveIndex = -1;
+    for (let i = 0; i < forecastPoints.length; i++) {
+      const value = forecastPoints[i].onTheWay ?? forecastPoints[i].forecast;
+      if (value !== null && value !== undefined && value > minAmount) {
+        lastAboveIndex = i;
+      }
+    }
+
+    // If stock never goes above minAmount even with orders, use first below point
+    if (lastAboveIndex === -1) {
+      const fp = forecastPoints.filter(p => {
+        const value = p.onTheWay ?? p.forecast;
+        return value !== null && value !== undefined && value <= minAmount;
+      });
+      return fp.length > 0 ? fp[0] : null;
+    }
+
+    // The critical point is the first point AFTER the last above-minAmount point
+    // where onTheWay drops to <= minAmount
+    for (let i = lastAboveIndex + 1; i < forecastPoints.length; i++) {
+      const value = forecastPoints[i].onTheWay ?? forecastPoints[i].forecast;
+      if (value !== null && value !== undefined && value <= minAmount) {
+        return forecastPoints[i];
+      }
+    }
+    return null;
   }, [chartData, minAmount]);
 
   if (isLoading) {
@@ -255,7 +292,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
               {criticalPoint && (
                 <ReferenceDot
                   x={criticalPoint.date}
-                  y={criticalPoint.forecast ?? 0}
+                  y={criticalPoint.onTheWay ?? criticalPoint.forecast ?? 0}
                   r={6}
                   fill="oklch(0.62 0.19 25)"
                   stroke="white"

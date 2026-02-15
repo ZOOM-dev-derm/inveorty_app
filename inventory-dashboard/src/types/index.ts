@@ -18,6 +18,7 @@ export interface Order {
   productName: string;
   received: string;
   expectedDate: string;
+  comments: string;
   rowIndex: number;        // 1-based row in the sheet (for updates)
 }
 

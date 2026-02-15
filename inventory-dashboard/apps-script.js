@@ -33,6 +33,9 @@ function doPost(e) {
       case "syncMissingProducts":
         result = syncMissingProducts(ss);
         break;
+      case "updateOrderComments":
+        result = updateOrderComments(ss, data);
+        break;
       default:
         result = { success: false, error: "Unknown action: " + action };
     }
@@ -169,6 +172,32 @@ function syncMissingProducts(ss) {
   }
 
   return { success: true, added: added };
+}
+
+function updateOrderComments(ss, data) {
+  var sheet = getSheetByGid(ss, ORDERS_GID);
+  if (!sheet) return { success: false, error: "Orders sheet not found" };
+
+  var rowIndex = data.rowIndex;
+  if (!rowIndex || rowIndex < 2)
+    return { success: false, error: "Invalid row index" };
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var logCol = -1;
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i].toString().indexOf("לוג") !== -1) {
+      logCol = i + 1;
+      break;
+    }
+  }
+  if (logCol === -1) {
+    // Auto-create the column so the feature is self-bootstrapping
+    logCol = sheet.getLastColumn() + 1;
+    sheet.getRange(1, logCol).setValue("לוג");
+  }
+
+  sheet.getRange(rowIndex, logCol).setValue(data.comments || "");
+  return { success: true };
 }
 
 // Required for CORS preflight

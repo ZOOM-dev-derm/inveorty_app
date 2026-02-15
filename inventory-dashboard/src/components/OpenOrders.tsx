@@ -1,8 +1,8 @@
-import { useOpenOrders, useUpdateOrderStatus } from "@/hooks/useSheetData";
+import { useOpenOrders, useUpdateOrderStatus, useUpdateOrderComments } from "@/hooks/useSheetData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { ShoppingCart, Loader2, Check, Calendar, Package, Clock } from "lucide-react";
+import { ShoppingCart, Loader2, Check, Calendar, Package, Clock, MessageSquare, Send } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Order } from "@/types";
 
@@ -59,14 +59,59 @@ interface OrderGroup {
   hasOverdue: boolean;
 }
 
+function parseCommentLog(raw: string): { date: string; text: string }[] {
+  if (!raw.trim()) return [];
+  return raw.split("|").map((entry) => {
+    const trimmed = entry.trim();
+    // Match date with optional time: DD/MM/YYYY or DD/MM/YYYY HH:MM
+    const dateMatch = trimmed.match(/^(\d{1,2}\/\d{1,2}\/\d{2,4}(?:\s+\d{1,2}:\d{2})?):\s*(.*)/);
+    if (dateMatch) {
+      return { date: dateMatch[1].trim(), text: dateMatch[2].trim() };
+    }
+    return { date: "", text: trimmed };
+  }).filter((e) => e.text);
+}
+
+function buildCommentString(entries: { date: string; text: string }[]): string {
+  return entries.map((e) => e.date ? `${e.date}: ${e.text}` : e.text).join(" | ");
+}
+
 function OrderItem({ order, index, mode }: { order: Order; index: number; mode: GroupMode }) {
   const statusMutation = useUpdateOrderStatus();
+  const commentsMutation = useUpdateOrderComments();
   const { date: expectedDate, estimated } = getExpectedDate(order);
   const overdue = isOverdue(order);
+  const [showComments, setShowComments] = useState(false);
+  const [newComment, setNewComment] = useState("");
+
+  const commentEntries = useMemo(() => parseCommentLog(order.comments), [order.comments]);
+  const hasComments = commentEntries.length > 0;
+
+  const handleAddComment = () => {
+    if (!newComment.trim()) return;
+    const today = new Date();
+    const dateStr = `${today.getDate().toString().padStart(2, "0")}/${(today.getMonth() + 1).toString().padStart(2, "0")}/${today.getFullYear()} ${today.getHours().toString().padStart(2, "0")}:${today.getMinutes().toString().padStart(2, "0")}`;
+    const newEntry = { date: dateStr, text: newComment.trim() };
+    const allEntries = [...commentEntries, newEntry];
+    const payload = { rowIndex: order.rowIndex, comments: buildCommentString(allEntries) };
+    console.log("[Comments] Saving comment:", payload);
+    commentsMutation.mutate(payload, {
+      onSuccess: () => {
+        console.log("[Comments] Saved successfully");
+        setNewComment("");
+      },
+      onError: (err) => {
+        console.error("[Comments] Failed to save:", err, "Payload:", payload);
+        alert("שגיאה בשמירת ההערה. נסה שוב.");
+      },
+    });
+  };
+
+  const lastTwoComments = commentEntries.slice(-2);
 
   return (
     <div
-      className="order-detail flex items-center justify-between gap-3 py-3 border-b border-border/20 last:border-0"
+      className="order-detail py-3 border-b border-border/20 last:border-0"
       style={{
         opacity: 0,
         transform: "translateY(8px)",
@@ -74,60 +119,131 @@ function OrderItem({ order, index, mode }: { order: Order; index: number; mode: 
         transitionDelay: `${index * 40}ms`,
       }}
     >
-      <div className="flex items-center gap-2 min-w-0 flex-1">
-        {mode === "date" ? (
-          <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5 self-start" />
-        ) : (
-          <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5 self-start" />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2">
-            <span className="text-sm font-medium leading-snug">
-              {mode === "date" ? order.productName : (order.orderDate || "לא ידוע")}
-            </span>
-            <Badge variant="outline" className="text-xs shrink-0 bg-muted/50">
-              {order.quantity}
-            </Badge>
-          </div>
-          {(order.dermaSku || order.supplierSku) && (
-            <div className="text-[11px] text-muted-foreground mt-0.5">
-              {[order.dermaSku, order.supplierSku].filter(Boolean).join(" | ")}
-            </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {mode === "date" ? (
+            <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5 self-start" />
+          ) : (
+            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5 self-start" />
           )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2">
+              <span className="text-sm font-medium leading-snug">
+                {mode === "date" ? order.productName : (order.orderDate || "לא ידוע")}
+              </span>
+              <Badge variant="outline" className="text-xs shrink-0 bg-muted/50">
+                {order.quantity}
+              </Badge>
+            </div>
+            {(order.dermaSku || order.supplierSku) && (
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                {[order.dermaSku, order.supplierSku].filter(Boolean).join(" | ")}
+              </div>
+            )}
+            {lastTwoComments.length > 0 && (
+              <div className="mt-1 space-y-0.5">
+                {lastTwoComments.map((entry, i) => (
+                  <div key={i} className="text-[10px] text-muted-foreground/70 leading-tight truncate">
+                    {entry.date && <span className="ml-1">{entry.date}:</span>} {entry.text}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {expectedDate && (
+            <span className={`text-xs ${overdue ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+              {formatDate(expectedDate)}
+              {estimated && " *"}
+            </span>
+          )}
+          {overdue && (
+            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+              באיחור
+            </Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-7 w-7 p-0 ${hasComments ? "text-primary" : ""}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowComments((v) => !v);
+            }}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            {hasComments && (
+              <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[9px] rounded-full h-3.5 w-3.5 flex items-center justify-center">
+                {commentEntries.length}
+              </span>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            disabled={statusMutation.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              statusMutation.mutate({
+                rowIndex: order.rowIndex,
+                received: true,
+              });
+            }}
+          >
+            {statusMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+          </Button>
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {expectedDate && (
-          <span className={`text-xs ${overdue ? "text-destructive font-medium" : "text-muted-foreground"}`}>
-            {formatDate(expectedDate)}
-            {estimated && " *"}
-          </span>
-        )}
-        {overdue && (
-          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-            באיחור
-          </Badge>
-        )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 w-7 p-0"
-          disabled={statusMutation.isPending}
-          onClick={(e) => {
-            e.stopPropagation();
-            statusMutation.mutate({
-              rowIndex: order.rowIndex,
-              received: true,
-            });
-          }}
-        >
-          {statusMutation.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Check className="h-3.5 w-3.5" />
+
+      {/* Comment log section */}
+      {showComments && (
+        <div className="mt-2 mr-6 border-t border-border/20 pt-2">
+          {commentEntries.length > 0 && (
+            <div className="space-y-1 mb-2">
+              {commentEntries.map((entry, i) => (
+                <div key={i} className="flex gap-2 text-xs">
+                  {entry.date && (
+                    <span className="text-muted-foreground shrink-0">{entry.date}</span>
+                  )}
+                  <span>{entry.text}</span>
+                </div>
+              ))}
+            </div>
           )}
-        </Button>
-      </div>
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleAddComment(); }}
+              placeholder="הוסף הערה..."
+              className="flex-1 text-xs border border-border/50 rounded-md px-2 py-1 bg-background"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              disabled={commentsMutation.isPending || !newComment.trim()}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddComment();
+              }}
+            >
+              {commentsMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Send className="h-3 w-3" />
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -290,7 +406,7 @@ export function OpenOrders({ search }: { search: string }) {
 
       {/* Cards grid */}
       {!isLoading && !error && groups.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 grid-cols-1">
           {groups.map((group) => (
             <OrderGroupCard key={group.label} group={group} mode={groupMode} />
           ))}
