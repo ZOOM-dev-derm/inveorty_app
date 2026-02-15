@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.google.com)",
+      "WebFetch(domain:doc-08-a8-sheets.googleusercontent.com)",
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(npx shadcn@latest init:*)",
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(npx vite build:*)",
+      "WebFetch(domain:localhost)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git config:*)",
+      "Bash(git -C \"C:\\\\Users\\\\lenovo\\\\Desktop\\\\code_projects\\\\claude\" log --oneline -5)",
+      "Bash(git -C \"C:\\\\Users\\\\lenovo\\\\Desktop\\\\code_projects\\\\claude\" log --oneline --all)",
+      "Bash(git -C \"C:\\\\Users\\\\lenovo\\\\Desktop\\\\code_projects\\\\claude\" remote -v)",
+      "Bash(git -C \"C:\\\\Users\\\\lenovo\\\\Desktop\\\\code_projects\\\\claude\" branch:*)",
+      "WebSearch",
+      "Bash(npx:*)",
+      "Bash(git push:*)",
+      "Bash(git branch:*)",
+      "Bash(gh api:*)",
+      "Bash(where:*)"
+    ]
+  }
+}
