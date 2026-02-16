@@ -109,7 +109,7 @@ export async function fetchMinAmount(): Promise<MinAmountItem[]> {
     .filter((row) => row[skuKey]?.trim())
     .map((row) => ({
       sku: row[skuKey]?.trim() ?? "",
-      minAmount: parseInt(row[minAmountKey] ?? "0", 10) || 0,
+      minAmount: parseInt((row[minAmountKey] ?? "0").replace(/,/g, ""), 10) || 0,
     }))
     .filter((item) => item.minAmount > 0);
 }
@@ -200,6 +200,7 @@ export async function addOrder(data: {
   quantity: string;
   productName: string;
   expectedDate: string;
+  log?: string;
 }) {
   return postToSheet("addOrder", data);
 }

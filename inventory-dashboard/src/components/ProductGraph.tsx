@@ -43,6 +43,19 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
     setBrushRange({ startIndex: newStart, endIndex: newEnd });
   }, [chartData.length, brushRange]);
 
+  // Compute Y-axis domain so the minAmount reference line is always visible
+  const yMax = useMemo(() => {
+    if (!chartData.length) return undefined;
+    let max = 0;
+    for (const p of chartData) {
+      if (p.quantity !== null && p.quantity !== undefined && p.quantity > max) max = p.quantity;
+      if (p.forecast !== null && p.forecast !== undefined && p.forecast > max) max = p.forecast;
+      if (p.onTheWay !== null && p.onTheWay !== undefined && p.onTheWay > max) max = p.onTheWay;
+    }
+    if (minAmount !== null && minAmount > max) max = minAmount;
+    return max > 0 ? Math.ceil(max * 1.05) : undefined; // 5% padding
+  }, [chartData, minAmount]);
+
   const ratePerMonth = Math.round(declineRate * 30);
   const realRatePerMonth = Math.round(realRate * 30);
   const minRatePerMonth = Math.round(minRate * 30);
@@ -200,6 +213,8 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
                 dermaSku: sku,
                 quantity: String(minAmount),
                 expectedDate: criticalPoint.date,
+                currentStock,
+                onTheWay,
               }}
             />
           )}
@@ -250,7 +265,8 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
                 tick={{ fontSize: 10, fontFamily: "Heebo" }}
                 tickLine={false}
                 axisLine={false}
-                width={35}
+                width={45}
+                domain={yMax ? [0, yMax] : undefined}
               />
               <Tooltip
                 contentStyle={{

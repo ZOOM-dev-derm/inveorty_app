@@ -62,10 +62,13 @@ export function useProductForecast(sku: string, currentStock: number) {
 
   // Find min amount for this SKU
   if (minAmountData) {
-    const found = minAmountData.find((m) => m.sku === sku);
+    const trimmedSku = sku.trim();
+    const found = minAmountData.find((m) => m.sku.trim() === trimmedSku);
     if (found) {
       minAmount = found.minAmount;
       minRate = -(minAmount / 180); // negative = decline, units per day
+    } else {
+      console.debug(`[useProductForecast] SKU "${sku}" NOT found in minAmountData. Available SKUs:`, minAmountData.map(m => m.sku));
     }
   }
 
@@ -326,7 +329,7 @@ export function useCriticalDates(items: InventoryOverviewItem[]) {
     const RECEIVED_VALUES = ["כן", "v", "✓", "true", "yes"];
 
     for (const item of items) {
-      const minEntry = minAmountData?.find(m => m.sku === item.sku);
+      const minEntry = minAmountData?.find(m => m.sku.trim() === item.sku.trim());
       if (!minEntry) { dateMap.set(item.sku, null); continue; }
       const minAmt = minEntry.minAmount;
 
@@ -413,7 +416,7 @@ export function useAddProduct() {
 export function useAddOrder() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderDate: string; supplierSku: string; dermaSku: string; quantity: string; productName: string; expectedDate: string }) => addOrder(data),
+    mutationFn: (data: { orderDate: string; supplierSku: string; dermaSku: string; quantity: string; productName: string; expectedDate: string; log?: string }) => addOrder(data),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["orders"] });
     },
