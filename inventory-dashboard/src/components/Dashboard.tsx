@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OpenOrders } from "./OpenOrders";
 
 import { ProductGraph } from "./ProductGraph";
-import { useInventoryOverview, useCriticalDates } from "@/hooks/useSheetData";
+import { useInventoryOverview, useCriticalDates, useMinAmount, useOpenOrders } from "@/hooks/useSheetData";
 import { useSyncMissingProducts } from "@/hooks/useSheetData";
 import { AddProductDialog } from "./AddProductDialog";
 import { AddOrderDialog } from "./AddOrderDialog";
@@ -32,6 +32,8 @@ function DashboardContent() {
 
   const { data: items, isLoading, error } = useInventoryOverview();
   const criticalDates = useCriticalDates(items ?? []);
+  const { data: minAmountData } = useMinAmount();
+  const { data: openOrders } = useOpenOrders();
   const syncMutation = useSyncMissingProducts();
 
   const handleNavigateToOrders = useCallback((productName: string) => {
@@ -47,7 +49,11 @@ function DashboardContent() {
 
   const filteredItems = useMemo(() => {
     if (!items) return [];
-    let result = items;
+
+    // Only show products that have a minimum amount defined
+    const minAmountSkus = new Set(minAmountData?.map((m) => m.sku) ?? []);
+    let result = items.filter((item) => minAmountSkus.has(item.sku));
+
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter(
@@ -56,16 +62,33 @@ function DashboardContent() {
           item.sku.toLowerCase().includes(q)
       );
     }
-    // Sort: items with critical dates first (soonest first), then items without
+
+    // Build set of SKUs with open (non-received) orders
+    const skusWithOpenOrders = new Set(openOrders?.map((o) => o.dermaSku) ?? []);
+
+    // Sort into 3 tiers:
+    // 1. Has critical date, NO open order (urgent - need to order)
+    // 2. Has critical date, HAS open order (ordered, waiting)
+    // 3. No critical date (everything else)
+    // Within each tier, sort by critical date ascending (soonest first)
     return [...result].sort((a, b) => {
       const da = criticalDates.get(a.sku);
       const db = criticalDates.get(b.sku);
+      const aHasOrder = skusWithOpenOrders.has(a.sku);
+      const bHasOrder = skusWithOpenOrders.has(b.sku);
+
+      const tierA = da ? (aHasOrder ? 2 : 1) : 3;
+      const tierB = db ? (bHasOrder ? 2 : 1) : 3;
+
+      if (tierA !== tierB) return tierA - tierB;
+
+      // Within same tier, sort by critical date ascending (nulls last)
       if (da && db) return da.getTime() - db.getTime();
       if (da && !db) return -1;
       if (!da && db) return 1;
       return 0;
     });
-  }, [items, search, criticalDates]);
+  }, [items, search, criticalDates, minAmountData, openOrders]);
 
   const totalStock = items?.reduce((sum, i) => sum + i.currentStock, 0) ?? 0;
   const productsOnTheWay = items?.filter((i) => i.onTheWay > 0).length ?? 0;
@@ -225,7 +248,7 @@ function DashboardContent() {
                     {search && ` (מסוננים מתוך ${items?.length ?? 0})`}
                   </Badge>
                 </div>
-                <div className="grid gap-4 lg:grid-cols-2">
+                <div className="grid gap-4 grid-cols-1">
                   {filteredItems.map((item) => (
                     <ProductGraph
                       key={item.sku}
