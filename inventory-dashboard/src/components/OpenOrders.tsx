@@ -60,20 +60,25 @@ interface OrderGroup {
 }
 
 function parseCommentLog(raw: string): { date: string; text: string }[] {
-  if (!raw.trim()) return [];
-  return raw.split("|").map((entry) => {
+  if (!raw || !raw.trim()) return [];
+
+  // Remove invisible formatting characters (like LTR/RTL marks)
+  const cleanRaw = raw.replace(/[\u200B-\u200F\u202A-\u202E]/g, "").trim();
+
+  const parts = cleanRaw.split("|");
+  const parsed = parts.map((entry) => {
     const trimmed = entry.trim();
     // Match date with optional time: DD/MM/YYYY or DD/MM/YYYY HH:MM
-    const dateMatch = trimmed.match(/^(\d{1,2}\/\d{1,2}\/\d{2,4}(?:\s+\d{1,2}:\d{2})?):\s*(.*)/);
+    // Removed ^ anchor to be more forgiving of leading garbage
+    const dateMatch = trimmed.match(/(\d{1,2}\/\d{1,2}\/\d{2,4}(?:\s+\d{1,2}:\d{2})?):\s*(.*)/);
     if (dateMatch) {
       return { date: dateMatch[1].trim(), text: dateMatch[2].trim() };
     }
+    // Fallback: if no date pattern found, return the whole text as body
     return { date: "", text: trimmed };
   }).filter((e) => e.text);
-}
 
-function buildCommentString(entries: { date: string; text: string }[]): string {
-  return entries.map((e) => e.date ? `${e.date}: ${e.text}` : e.text).join(" | ");
+  return parsed;
 }
 
 function OrderItem({ order, index, mode }: { order: Order; index: number; mode: GroupMode }) {
@@ -91,20 +96,17 @@ function OrderItem({ order, index, mode }: { order: Order; index: number; mode: 
     if (!newComment.trim()) return;
     const today = new Date();
     const dateStr = `${today.getDate().toString().padStart(2, "0")}/${(today.getMonth() + 1).toString().padStart(2, "0")}/${today.getFullYear()} ${today.getHours().toString().padStart(2, "0")}:${today.getMinutes().toString().padStart(2, "0")}`;
-    const newEntry = { date: dateStr, text: newComment.trim() };
-    const allEntries = [...commentEntries, newEntry];
-    const payload = { rowIndex: order.rowIndex, comments: buildCommentString(allEntries) };
-    console.log("[Comments] Saving comment:", payload);
-    commentsMutation.mutate(payload, {
-      onSuccess: () => {
-        console.log("[Comments] Saved successfully");
-        setNewComment("");
-      },
-      onError: (err) => {
-        console.error("[Comments] Failed to save:", err, "Payload:", payload);
-        alert("שגיאה בשמירת ההערה. נסה שוב.");
-      },
-    });
+    const commentStr = `${dateStr}: ${newComment.trim()}`;
+    commentsMutation.mutate(
+      { rowIndex: order.rowIndex, comment: commentStr },
+      {
+        onSuccess: () => setNewComment(""),
+        onError: (err) => {
+          console.error("[Comments] Failed to save:", err);
+          alert("שגיאה בשמירת ההערה. נסה שוב.");
+        },
+      }
+    );
   };
 
   const lastTwoComments = commentEntries.slice(-2);
@@ -254,10 +256,9 @@ function OrderGroupCard({ group, mode }: { group: OrderGroup; mode: GroupMode })
   return (
     <div
       className={`group relative rounded-xl border-2 p-4 transition-all duration-300 cursor-default shadow-sm
-        ${
-          group.hasOverdue
-            ? "border-destructive/40 bg-gradient-to-br from-rose-50/50 via-white to-pink-50/30 hover:border-destructive/60 hover:shadow-lg hover:shadow-red-100/50"
-            : "border-border/50 bg-gradient-to-br from-white via-background to-slate-50/30 hover:border-primary/30 hover:shadow-md"
+        ${group.hasOverdue
+          ? "border-destructive/40 bg-gradient-to-br from-rose-50/50 via-white to-pink-50/30 hover:border-destructive/60 hover:shadow-lg hover:shadow-red-100/50"
+          : "border-border/50 bg-gradient-to-br from-white via-background to-slate-50/30 hover:border-primary/30 hover:shadow-md"
         }`}
     >
       {/* Default state — always visible */}
@@ -283,7 +284,7 @@ function OrderGroupCard({ group, mode }: { group: OrderGroup; mode: GroupMode })
       </div>
 
       {/* Hover reveal — order details */}
-      <div className="mt-3 max-h-0 overflow-hidden transition-all duration-300 group-hover:max-h-[500px]">
+      <div className="mt-3 max-h-0 overflow-hidden transition-all duration-300 group-hover:max-h-[2000px]">
         <div className="pt-2 border-t border-border/30">
           {group.orders.map((order, idx) => (
             <OrderItem key={`${order.supplierSku}-${order.rowIndex}`} order={order} index={idx} mode={mode} />
@@ -307,12 +308,12 @@ export function OpenOrders({ search }: { search: string }) {
     const q = search.trim().toLowerCase();
     const filtered = q
       ? orders.filter(
-          (o) =>
-            o.productName.toLowerCase().includes(q) ||
-            o.orderDate.toLowerCase().includes(q) ||
-            (o.dermaSku || "").toLowerCase().includes(q) ||
-            (o.supplierSku || "").toLowerCase().includes(q)
-        )
+        (o) =>
+          o.productName.toLowerCase().includes(q) ||
+          o.orderDate.toLowerCase().includes(q) ||
+          (o.dermaSku || "").toLowerCase().includes(q) ||
+          (o.supplierSku || "").toLowerCase().includes(q)
+      )
       : orders;
 
     const map = new Map<string, Order[]>();
@@ -364,22 +365,20 @@ export function OpenOrders({ search }: { search: string }) {
           <div className="flex gap-1 p-1 rounded-lg bg-muted">
             <button
               onClick={() => setGroupMode("date")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                groupMode === "date"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${groupMode === "date"
                   ? "bg-white text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
-              }`}
+                }`}
             >
               <Calendar className="h-3.5 w-3.5" />
               לפי תאריך
             </button>
             <button
               onClick={() => setGroupMode("product")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                groupMode === "product"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${groupMode === "product"
                   ? "bg-white text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
-              }`}
+                }`}
             >
               <Package className="h-3.5 w-3.5" />
               לפי מוצר

@@ -433,7 +433,10 @@ export function useUpdateOrderStatus() {
 export function useUpdateOrderComments() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (data: { rowIndex: number; comments: string }) => updateOrderComments(data.rowIndex, data.comments),
+    mutationFn: (data: { rowIndex: number; comment: string }) => {
+      // Send only the new comment — the server reads existing and appends.
+      return updateOrderComments(data.rowIndex, data.comment);
+    },
     onMutate: async (data) => {
       await client.cancelQueries({ queryKey: ["orders"] });
       const previous = client.getQueryData<Order[]>(["orders"]);
@@ -441,7 +444,9 @@ export function useUpdateOrderComments() {
         client.setQueryData<Order[]>(["orders"], (old) =>
           old?.map((order) =>
             order.rowIndex === data.rowIndex
-              ? { ...order, comments: data.comments }
+              ? { ...order, comments: order.comments
+                  ? order.comments + " | " + data.comment
+                  : data.comment }
               : order
           )
         );
@@ -453,7 +458,8 @@ export function useUpdateOrderComments() {
         client.setQueryData(["orders"], context.previous);
       }
     },
-    onSettled: () => {
+    onSuccess: () => {
+      // Delay refetch to allow Google Sheets CSV export to propagate
       setTimeout(() => {
         client.invalidateQueries({ queryKey: ["orders"] });
       }, 5000);

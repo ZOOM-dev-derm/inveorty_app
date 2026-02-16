@@ -29,8 +29,34 @@ function parseCsv<T>(url: string): Promise<T[]> {
     Papa.parse<T>(url, {
       download: true,
       header: true,
-      skipEmptyLines: true,
+      skipEmptyLines: true, // Keep true for other functions
       complete: (results) => resolve(results.data),
+      error: (error: Error) => reject(error),
+    });
+  });
+}
+// ...
+// Actually, let's try a safer approach:
+// 1. Fetch with skipEmptyLines: false (so we get ALL rows)
+// 2. But inside fetchOrders, we must be VERY careful with the raw data.
+// 3. And limit the number of rows if it's crazy huge?
+
+// Let's rethink. Use a different robust parsing method.
+// We'll use skipEmptyLines: false but immediately filter and map safely.
+
+function parseCsvWithIndex<T>(url: string): Promise<{ data: T; originalIndex: number }[]> {
+  return new Promise((resolve, reject) => {
+    Papa.parse<T>(url, {
+      download: true,
+      header: true,
+      skipEmptyLines: false, // Must be false to keep row indices correct
+      complete: (results) => {
+        const mapped = results.data.map((item, idx) => ({
+          data: item,
+          originalIndex: idx + 2
+        }));
+        resolve(mapped);
+      },
       error: (error: Error) => reject(error),
     });
   });
@@ -72,7 +98,6 @@ export async function fetchHistory(): Promise<HistoryItem[]> {
 
 export async function fetchMinAmount(): Promise<MinAmountItem[]> {
   const raw = await parseCsv<Record<string, string>>(buildCsvUrl(MIN_AMOUNT_GID));
-  // Detect SKU column - could be מק"ט דרמלוסופי or מ"קט דרמלוסופי or מקט דרמלוסופי
   const firstRow = raw[0] ?? {};
   const cols = Object.keys(firstRow);
   const skuKey = cols.find((k) =>
@@ -90,24 +115,31 @@ export async function fetchMinAmount(): Promise<MinAmountItem[]> {
 }
 
 export async function fetchOrders(): Promise<Order[]> {
-  const raw = await parseCsv<Record<string, string>>(buildCsvUrl(ORDERS_GID));
-  if (raw.length === 0) return [];
+  const rawWithIndex = await parseCsvWithIndex<Record<string, string>>(buildCsvUrl(ORDERS_GID));
 
-  const firstRow = raw[0];
-  const cols = Object.keys(firstRow);
+  if (rawWithIndex.length === 0) return [];
+
+  // Use the first non-empty row to detect columns? 
+  // Attempt to find a row with headers if possible, OR assumes PapaParse header:true worked and first row of file was headers.
+  // rawWithIndex[0].data has keys.
+
+  const firstDataRow = rawWithIndex[0]?.data ?? {};
+  const cols = Object.keys(firstDataRow);
   console.debug("[fetchOrders] all columns:", cols);
 
   const dermaSkuKey = cols.find((k) => k.includes("קוד") && k.includes("דרמה")) ?? cols.find((k) => k.includes("קוד דרמה")) ?? "קוד דרמה";
   const qtyKey = cols.find((k) => k.includes("כמות")) ?? "כמות סה\"כ";
   const receivedKey = cols.find((k) => k.includes("התקבל")) ?? "התקבל";
   const expectedKey = cols.find((k) => k.includes("צפי")) ?? "תאריך צפי";
-  const logKey = cols.find((k) => k.includes("לוג")) ?? "לוג";
+  // Prioritize exact match for "לוג" (Log) to avoid matching "קטלוג" (Catalog) or similar
+  const logKey = cols.find((k) => k.trim() === "לוג") ?? cols.find((k) => k.includes("לוג")) ?? "לוג";
 
   console.debug("[fetchOrders] detected columns:", { dermaSkuKey, qtyKey, receivedKey, expectedKey, logKey });
 
-  return raw
-    .filter((row) => row["שם פריט"]?.trim())
-    .map((row, idx) => {
+  return rawWithIndex
+    .filter((item) => item.data["שם פריט"]?.trim()) // Filter based on content
+    .map((item) => {
+      const row = item.data;
       const orderDateStr = row["תאריך הזמנה"]?.trim() ?? "";
       let expectedDate = row[expectedKey]?.trim() ?? "";
 
@@ -129,7 +161,7 @@ export async function fetchOrders(): Promise<Order[]> {
         received: row[receivedKey]?.trim() ?? "",
         expectedDate,
         comments: row[logKey]?.trim() ?? "",
-        rowIndex: idx + 2, // 1-based, +1 for header row, +1 for 0-index
+        rowIndex: item.originalIndex, // Use the captured original index
       };
     });
 }
@@ -177,7 +209,7 @@ export async function updateOrderStatus(rowIndex: number, received: boolean) {
 }
 
 export async function updateOrderComments(rowIndex: number, comments: string) {
-  return postToSheet("updateOrderComments", { rowIndex, comments });
+  return postToSheet("updateOrderComments", { rowIndex, comments, comment: comments });
 }
 
 export async function syncMissingProducts() {

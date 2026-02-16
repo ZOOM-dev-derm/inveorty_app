@@ -184,19 +184,41 @@ function updateOrderComments(ss, data) {
 
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var logCol = -1;
+  // Try exact match first for "לוג"
   for (var i = 0; i < headers.length; i++) {
-    if (headers[i].toString().indexOf("לוג") !== -1) {
+    if (headers[i].toString().trim() === "לוג") {
       logCol = i + 1;
       break;
     }
   }
+  // Fallback to partial match if not found
+  if (logCol === -1) {
+    for (var i = 0; i < headers.length; i++) {
+      if (headers[i].toString().indexOf("לוג") !== -1) {
+        logCol = i + 1;
+        break;
+      }
+    }
+  }
+
   if (logCol === -1) {
     // Auto-create the column so the feature is self-bootstrapping
     logCol = sheet.getLastColumn() + 1;
     sheet.getRange(1, logCol).setValue("לוג");
   }
 
-  sheet.getRange(rowIndex, logCol).setValue(data.comments || "");
+  // Read existing value and append new comment
+  var range = sheet.getRange(rowIndex, logCol);
+  var existing = range.getValue().toString().trim();
+  var newComment = data.comment || data.comments || "";
+
+  if (!newComment) return { success: true }; // Nothing to add
+
+  var finalValue = existing
+    ? existing + " | " + newComment
+    : newComment;
+
+  range.setValue(finalValue);
   return { success: true };
 }
 
