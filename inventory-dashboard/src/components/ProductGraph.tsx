@@ -286,20 +286,20 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
       <CardHeader className="pb-3 space-y-2 bg-gradient-to-b from-muted/20 to-transparent">
         {/* Primary Info — Product Name + Current Stock */}
         <div className="space-y-1">
-          <CardTitle className="text-lg font-bold text-foreground leading-tight">{productName}</CardTitle>
+          <CardTitle className="text-base md:text-lg font-bold text-foreground leading-tight">{productName}</CardTitle>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-primary">{currentStock}</span>
-            <span className="text-sm font-medium text-muted-foreground">יחידות במלאי</span>
+            <span className="text-2xl md:text-3xl font-extrabold text-primary">{currentStock}</span>
+            <span className="text-xs md:text-sm font-medium text-muted-foreground">יחידות במלאי</span>
           </div>
         </div>
 
         {/* SKU */}
-        <div className="text-xs text-muted-foreground font-medium">
+        <div className="text-[10px] md:text-xs text-muted-foreground font-medium">
           מק״ט: {sku}
         </div>
 
         {/* Status Chips Row */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">
           {/* Rate Chip */}
           <span
             className={`status-chip ${isDecline ? "chip-decline" : isGrowth ? "chip-growth" : "chip-stable"}`}
@@ -348,7 +348,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
           {criticalPoint && minAmount !== null && (
             <AddOrderDialog
               trigger={
-                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs px-2.5 border-primary/30 text-primary hover:bg-primary/5">
+                <Button variant="outline" size="sm" className="h-6 md:h-7 gap-1.5 text-[10px] md:text-xs px-2 md:px-2.5 border-primary/30 text-primary hover:bg-primary/5">
                   <ShoppingCart className="h-3 w-3" />
                   הזמן עכשיו
                 </Button>
@@ -367,7 +367,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
 
         {/* Rate Comparison */}
         {minAmount !== null && (
-          <div className="text-[11px] pt-1">
+          <div className="text-[10px] md:text-[11px] pt-1">
             <span className={realFasterThanMin ? "text-rose-700 font-medium" : "text-emerald-700 font-medium"}>
               {realFasterThanMin ? "⚠ " : "✓ "}
               קצב בפועל: {Math.abs(realRatePerMonth)}/חודש
@@ -379,29 +379,29 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
       </CardHeader>
       <CardContent className="p-0 pr-0">
         <div
-          className="h-80 w-full relative touch-none"
+          className="h-64 md:h-80 w-full relative touch-none"
           onWheel={handleWheel}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
           {/* Zoom control buttons */}
-          <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 p-0.5 shadow-sm">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={zoomIn} title="זום פנימה">
-              <ZoomIn className="h-3.5 w-3.5" />
+          <div className="absolute top-1 left-1 md:top-2 md:left-2 z-10 flex items-center gap-0.5 md:gap-1 bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 p-0.5 shadow-sm scale-90 md:scale-100 origin-top-left">
+            <Button variant="ghost" size="icon" className="h-6 w-6 md:h-7 md:w-7" onClick={zoomIn} title="זום פנימה">
+              <ZoomIn className="h-3 md:h-3.5 w-3 md:w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={zoomOut} title="זום החוצה">
-              <ZoomOut className="h-3.5 w-3.5" />
+            <Button variant="ghost" size="icon" className="h-6 w-6 md:h-7 md:w-7" onClick={zoomOut} title="זום החוצה">
+              <ZoomOut className="h-3 md:h-3.5 w-3 md:w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={resetZoom} title="איפוס תצוגה" disabled={!isZoomed}>
-              <RotateCcw className="h-3.5 w-3.5" />
+            <Button variant="ghost" size="icon" className="h-6 w-6 md:h-7 md:w-7" onClick={resetZoom} title="איפוס תצוגה" disabled={!isZoomed}>
+              <RotateCcw className="h-3 md:h-3.5 w-3 md:w-3.5" />
             </Button>
-            <div className="w-px h-4 bg-border/50" />
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={panLeft} title="הזז שמאלה" disabled={zoomRange.start === 0}>
-              <ChevronLeft className="h-3.5 w-3.5" />
+            <div className="w-px h-3 md:h-4 bg-border/50" />
+            <Button variant="ghost" size="icon" className="h-6 w-6 md:h-7 md:w-7" onClick={panLeft} title="הזז שמאלה" disabled={zoomRange.start === 0}>
+              <ChevronLeft className="h-3 md:h-3.5 w-3 md:w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={panRight} title="הזז ימינה" disabled={zoomRange.end >= chartData.length - 1}>
-              <ChevronRight className="h-3.5 w-3.5" />
+            <Button variant="ghost" size="icon" className="h-6 w-6 md:h-7 md:w-7" onClick={panRight} title="הזז ימינה" disabled={zoomRange.end >= chartData.length - 1}>
+              <ChevronRight className="h-3 md:h-3.5 w-3 md:w-3.5" />
             </Button>
           </div>
           <ResponsiveContainer width="100%" height="100%">

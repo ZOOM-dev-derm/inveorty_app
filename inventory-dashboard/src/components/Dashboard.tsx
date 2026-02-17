@@ -97,29 +97,29 @@ function DashboardContent() {
     <div className="min-h-screen bg-gradient-to-br from-rose-50/30 via-background to-purple-50/20" dir="rtl">
       {/* Sticky Header with Search, Metrics, and Actions */}
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border/40 shadow-sm">
-        <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-3">
-          <div className="flex flex-col md:flex-row items-center gap-4 justify-between">
+        <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-2 md:py-3">
+          <div className="flex flex-col md:flex-row items-center gap-3 md:gap-4 justify-between">
 
             {/* Right Side: Search & Metrics */}
-            <div className="flex items-center gap-4 flex-1 w-full md:w-auto">
-              <div className="relative flex-1 max-w-sm lg:max-w-md">
+            <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
+              <div className="relative flex-1 max-w-full md:max-w-sm lg:max-w-md">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="חפש מוצר לפי שם או מק״ט..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full h-10 pr-10 pl-4 rounded-lg border border-input bg-background text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  className="w-full h-9 md:h-10 pr-10 pl-4 rounded-lg border border-input bg-background text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                 />
               </div>
 
-              {/* Metrics - Small next to search */}
+              {/* Metrics - Desktop */}
               <div className="hidden lg:flex items-center gap-4 text-sm text-muted-foreground whitespace-nowrap px-2">
-                <div className="flex items-center gap-1.5 bg-blue-50/50 px-2 py-1 rounded-md border border-blue-100/50">
+                <div className="flex items-center gap-1.5 bg-blue-50/50 px-2.5 py-1 rounded-md border border-blue-100/50">
                   <span className="text-blue-700 font-medium">סה״כ במלאי:</span>
                   <span className="font-bold text-blue-900">{totalStock.toLocaleString()}</span>
                 </div>
-                <div className="flex items-center gap-1.5 bg-purple-50/50 px-2 py-1 rounded-md border border-purple-100/50">
+                <div className="flex items-center gap-1.5 bg-purple-50/50 px-2.5 py-1 rounded-md border border-purple-100/50">
                   <span className="text-purple-700 font-medium">הזמנות פתוחות:</span>
                   <span className="font-bold text-purple-900">{productsOnTheWay}</span>
                 </div>
@@ -127,33 +127,35 @@ function DashboardContent() {
             </div>
 
             {/* Left Side: Tabs & Actions */}
-            <div className="flex items-center gap-2 w-full md:w-auto justify-end overflow-x-auto pb-1 md:pb-0">
+            <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
               <div className="flex gap-1 p-1 rounded-lg bg-muted/80 shrink-0">
                 <button
                   onClick={() => setActiveTab("graphs")}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "graphs"
-                    ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+                  className={`flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "graphs"
+                      ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-white/50"
                     }`}
                 >
                   <BarChart3 className="h-3.5 w-3.5" />
-                  גרפים
+                  <span className="hidden sm:inline">גרפים</span>
+                  <span className="sm:hidden">גרפים</span>
                 </button>
                 <button
                   onClick={() => setActiveTab("orders")}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "orders"
-                    ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+                  className={`flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "orders"
+                      ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-white/50"
                     }`}
                 >
                   <ShoppingCart className="h-3.5 w-3.5" />
-                  הזמנות
+                  <span className="hidden sm:inline">הזמנות</span>
+                  <span className="sm:hidden">הזמנות</span>
                 </button>
               </div>
 
-              <div className="h-5 w-px bg-border mx-1 shrink-0" />
+              <div className="h-5 w-px bg-border mx-1 shrink-0 hidden sm:block" />
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1 md:gap-2 shrink-0">
                 <AddProductDialog />
                 <AddOrderDialog />
                 <Button
@@ -162,7 +164,7 @@ function DashboardContent() {
                   onClick={() => syncMutation.mutate()}
                   disabled={syncMutation.isPending}
                   title="סנכרן מוצרים"
-                  className="h-8 w-8"
+                  className="h-8 w-8 hidden sm:inline-flex"
                 >
                   {syncMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -185,12 +187,12 @@ function DashboardContent() {
           </div>
 
           {/* Mobile Metrics (Visible only on smaller screens) */}
-          <div className="lg:hidden flex items-center gap-3 mt-3 text-xs text-muted-foreground overflow-x-auto">
-            <div className="flex items-center gap-1.5 bg-blue-50/50 px-2 py-1 rounded-md border border-blue-100/50 whitespace-nowrap">
+          <div className="lg:hidden flex items-center gap-2 mt-2 text-xs text-muted-foreground overflow-x-auto pb-1 scrollbar-hide">
+            <div className="flex items-center gap-1.5 bg-blue-50/50 px-2 py-1 rounded-md border border-blue-100/50 whitespace-nowrap shrink-0">
               <span className="text-blue-700 font-medium">סה״כ במלאי:</span>
               <span className="font-bold text-blue-900">{totalStock.toLocaleString()}</span>
             </div>
-            <div className="flex items-center gap-1.5 bg-purple-50/50 px-2 py-1 rounded-md border border-purple-100/50 whitespace-nowrap">
+            <div className="flex items-center gap-1.5 bg-purple-50/50 px-2 py-1 rounded-md border border-purple-100/50 whitespace-nowrap shrink-0">
               <span className="text-purple-700 font-medium">הזמנות פתוחות:</span>
               <span className="font-bold text-purple-900">{productsOnTheWay}</span>
             </div>
