@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   AreaChart,
   Area,
@@ -9,13 +9,12 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   ReferenceDot,
-  Brush,
 } from "recharts";
 import { useProductForecast } from "@/hooks/useSheetData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { TrendingDown, TrendingUp, Minus, Truck, AlertCircle, ShoppingCart } from "lucide-react";
+import { TrendingDown, TrendingUp, Minus, Truck, AlertCircle, ShoppingCart, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface ProductGraphProps {
   sku: string;
@@ -28,33 +27,179 @@ interface ProductGraphProps {
 export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrdersClick }: ProductGraphProps) {
   const { chartData, declineRate, minAmount, realRate, minRate, isLoading, error } = useProductForecast(sku, currentStock);
 
-  const [brushRange, setBrushRange] = useState<{ startIndex: number; endIndex: number } | undefined>();
+  const [zoomRange, setZoomRange] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
+  const wheelThrottleRef = useRef<number | null>(null);
+  const touchRef = useRef<{ startDist: number; startRange: { start: number; end: number }; lastX: number; fingers: number } | null>(null);
+
+  // Reset zoom range when chartData changes
+  useEffect(() => {
+    if (chartData.length > 0) {
+      setZoomRange({ start: 0, end: chartData.length - 1 });
+    }
+  }, [chartData.length]);
+
+  const isZoomed = zoomRange.end - zoomRange.start < chartData.length - 1;
+
+  const zoomIn = useCallback(() => {
+    setZoomRange(prev => {
+      const range = prev.end - prev.start;
+      if (range < 3) return prev;
+      const step = Math.max(1, Math.round(range * 0.15));
+      return {
+        start: Math.min(prev.end - 2, prev.start + step),
+        end: Math.max(prev.start + 2, prev.end - step),
+      };
+    });
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setZoomRange(prev => {
+      const maxEnd = chartData.length - 1;
+      const range = prev.end - prev.start;
+      const step = Math.max(1, Math.round(range * 0.15));
+      return {
+        start: Math.max(0, prev.start - step),
+        end: Math.min(maxEnd, prev.end + step),
+      };
+    });
+  }, [chartData.length]);
+
+  const resetZoom = useCallback(() => {
+    setZoomRange({ start: 0, end: chartData.length - 1 });
+  }, [chartData.length]);
+
+  const panLeft = useCallback(() => {
+    setZoomRange(prev => {
+      const range = prev.end - prev.start;
+      const step = Math.max(1, Math.round(range * 0.2));
+      const newStart = Math.max(0, prev.start - step);
+      return { start: newStart, end: newStart + range };
+    });
+  }, []);
+
+  const panRight = useCallback(() => {
+    setZoomRange(prev => {
+      const maxEnd = chartData.length - 1;
+      const range = prev.end - prev.start;
+      const step = Math.max(1, Math.round(range * 0.2));
+      const newEnd = Math.min(maxEnd, prev.end + step);
+      return { start: newEnd - range, end: newEnd };
+    });
+  }, [chartData.length]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
+    if (wheelThrottleRef.current) return;
+    wheelThrottleRef.current = window.setTimeout(() => { wheelThrottleRef.current = null; }, 50);
+
     const dataLen = chartData.length;
     if (dataLen < 3) return;
-    const start = brushRange?.startIndex ?? 0;
-    const end = brushRange?.endIndex ?? dataLen - 1;
-    const zoomDir = e.deltaY < 0 ? 1 : -1; // up = zoom in
-    const step = Math.max(1, Math.round((end - start) * 0.1));
-    const newStart = Math.min(end - 2, Math.max(0, start + zoomDir * step));
-    const newEnd = Math.max(newStart + 2, Math.min(dataLen - 1, end - zoomDir * step));
-    setBrushRange({ startIndex: newStart, endIndex: newEnd });
-  }, [chartData.length, brushRange]);
+
+    setZoomRange(prev => {
+      const range = prev.end - prev.start;
+      const zoomDir = e.deltaY < 0 ? 1 : -1; // up = zoom in
+      const step = Math.max(1, Math.round(range * 0.05));
+      if (zoomDir > 0) {
+        // Zoom in
+        if (range < 3) return prev;
+        return {
+          start: Math.min(prev.end - 2, prev.start + step),
+          end: Math.max(prev.start + 2, prev.end - step),
+        };
+      } else {
+        // Zoom out
+        return {
+          start: Math.max(0, prev.start - step),
+          end: Math.min(dataLen - 1, prev.end + step),
+        };
+      }
+    });
+  }, [chartData.length]);
+
+  const getTouchDist = (touches: React.TouchList) => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      touchRef.current = {
+        startDist: getTouchDist(e.touches),
+        startRange: { ...zoomRange },
+        lastX: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        fingers: 2,
+      };
+    } else if (e.touches.length === 1 && isZoomed) {
+      touchRef.current = {
+        startDist: 0,
+        startRange: { ...zoomRange },
+        lastX: e.touches[0].clientX,
+        fingers: 1,
+      };
+    }
+  }, [zoomRange, isZoomed]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchRef.current) return;
+    const dataLen = chartData.length;
+    if (dataLen < 3) return;
+
+    if (touchRef.current.fingers === 2 && e.touches.length === 2) {
+      // Pinch zoom
+      e.preventDefault();
+      const dist = getTouchDist(e.touches);
+      const scale = dist / touchRef.current.startDist;
+      const origRange = touchRef.current.startRange.end - touchRef.current.startRange.start;
+      const newRange = Math.max(2, Math.min(dataLen - 1, Math.round(origRange / scale)));
+      const center = Math.round((touchRef.current.startRange.start + touchRef.current.startRange.end) / 2);
+      const half = Math.round(newRange / 2);
+      let newStart = Math.max(0, center - half);
+      let newEnd = newStart + newRange;
+      if (newEnd > dataLen - 1) {
+        newEnd = dataLen - 1;
+        newStart = Math.max(0, newEnd - newRange);
+      }
+      setZoomRange({ start: newStart, end: newEnd });
+    } else if (touchRef.current.fingers === 1 && e.touches.length === 1 && isZoomed) {
+      // Single-finger pan
+      const deltaX = e.touches[0].clientX - touchRef.current.lastX;
+      touchRef.current.lastX = e.touches[0].clientX;
+      const range = zoomRange.end - zoomRange.start;
+      // Pan direction: dragging right moves view left (earlier data) in RTL context
+      const step = Math.round(deltaX / 10);
+      if (step !== 0) {
+        setZoomRange(prev => {
+          const newStart = Math.max(0, Math.min(dataLen - 1 - range, prev.start - step));
+          return { start: newStart, end: newStart + range };
+        });
+      }
+    }
+  }, [chartData.length, isZoomed, zoomRange]);
+
+  const handleTouchEnd = useCallback(() => {
+    touchRef.current = null;
+  }, []);
+
+  // Slice chart data to visible range
+  const visibleData = useMemo(() => {
+    if (chartData.length === 0) return chartData;
+    return chartData.slice(zoomRange.start, zoomRange.end + 1);
+  }, [chartData, zoomRange]);
 
   // Compute Y-axis domain so the minAmount reference line is always visible
   const yMax = useMemo(() => {
-    if (!chartData.length) return undefined;
+    if (!visibleData.length) return undefined;
     let max = 0;
-    for (const p of chartData) {
+    for (const p of visibleData) {
       if (p.quantity !== null && p.quantity !== undefined && p.quantity > max) max = p.quantity;
       if (p.forecast !== null && p.forecast !== undefined && p.forecast > max) max = p.forecast;
       if (p.onTheWay !== null && p.onTheWay !== undefined && p.onTheWay > max) max = p.onTheWay;
     }
     if (minAmount !== null && minAmount > max) max = minAmount;
     return max > 0 ? Math.ceil(max * 1.05) : undefined; // 5% padding
-  }, [chartData, minAmount]);
+  }, [visibleData, minAmount]);
 
   const ratePerMonth = Math.round(declineRate * 30);
   const realRatePerMonth = Math.round(realRate * 30);
@@ -233,10 +378,35 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
         )}
       </CardHeader>
       <CardContent className="p-0 pr-0">
-        <div className="h-80 w-full cursor-grab active:cursor-grabbing" onWheel={handleWheel}>
+        <div
+          className="h-80 w-full relative touch-none"
+          onWheel={handleWheel}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Zoom control buttons */}
+          <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 p-0.5 shadow-sm">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={zoomIn} title="זום פנימה">
+              <ZoomIn className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={zoomOut} title="זום החוצה">
+              <ZoomOut className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={resetZoom} title="איפוס תצוגה" disabled={!isZoomed}>
+              <RotateCcw className="h-3.5 w-3.5" />
+            </Button>
+            <div className="w-px h-4 bg-border/50" />
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={panLeft} title="הזז שמאלה" disabled={zoomRange.start === 0}>
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={panRight} title="הזז ימינה" disabled={zoomRange.end >= chartData.length - 1}>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
-              data={chartData}
+              data={visibleData}
               margin={{ top: 15, right: 16, left: 0, bottom: 5 }}
             >
               <defs>
@@ -358,16 +528,6 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
                 connectNulls={true}
                 dot={false}
                 activeDot={{ r: 5, fill: "oklch(0.55 0.15 280)", stroke: "white", strokeWidth: 2 }}
-              />
-              <Brush
-                dataKey="date"
-                height={28}
-                stroke="oklch(0.45 0.1 340)"
-                fill="oklch(0.955 0.008 30)"
-                travellerWidth={8}
-                startIndex={brushRange?.startIndex}
-                endIndex={brushRange?.endIndex}
-                onChange={(range) => setBrushRange(range as { startIndex: number; endIndex: number })}
               />
             </AreaChart>
           </ResponsiveContainer>
