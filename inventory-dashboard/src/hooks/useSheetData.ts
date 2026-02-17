@@ -416,7 +416,7 @@ export function useAddProduct() {
 export function useAddOrder() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderDate: string; supplierSku: string; dermaSku: string; quantity: string; productName: string; expectedDate: string; log?: string }) => addOrder(data),
+    mutationFn: (data: { orderDate: string; supplierSku: string; dermaSku: string; quantity: string; productName: string; expectedDate: string; container?: string; content?: string; log?: string }) => addOrder(data),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["orders"] });
     },

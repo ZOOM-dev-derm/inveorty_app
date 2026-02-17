@@ -305,15 +305,13 @@ export function OpenOrders({ search }: { search: string }) {
   const groups = useMemo<OrderGroup[]>(() => {
     if (!orders) return [];
 
-    const q = search.trim().toLowerCase();
-    const filtered = q
-      ? orders.filter(
-        (o) =>
-          o.productName.toLowerCase().includes(q) ||
-          o.orderDate.toLowerCase().includes(q) ||
-          (o.dermaSku || "").toLowerCase().includes(q) ||
-          (o.supplierSku || "").toLowerCase().includes(q)
-      )
+
+    const terms = search.trim().toLowerCase().split(/\s+/);
+    const filtered = terms.length > 0
+      ? orders.filter((o) => {
+        const searchable = `${o.productName || ""} ${o.orderDate || ""} ${o.dermaSku || ""} ${o.supplierSku || ""}`.toLowerCase();
+        return terms.every((term) => searchable.includes(term));
+      })
       : orders;
 
     const map = new Map<string, Order[]>();
@@ -366,8 +364,8 @@ export function OpenOrders({ search }: { search: string }) {
             <button
               onClick={() => setGroupMode("date")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${groupMode === "date"
-                  ? "bg-white text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                ? "bg-white text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
                 }`}
             >
               <Calendar className="h-3.5 w-3.5" />
@@ -376,8 +374,8 @@ export function OpenOrders({ search }: { search: string }) {
             <button
               onClick={() => setGroupMode("product")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${groupMode === "product"
-                  ? "bg-white text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                ? "bg-white text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
                 }`}
             >
               <Package className="h-3.5 w-3.5" />

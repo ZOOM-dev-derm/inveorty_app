@@ -47,12 +47,14 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
   const [quantity, setQuantity] = useState("");
   const [productName, setProductName] = useState("");
   const [expectedDate, setExpectedDate] = useState("");
+  const [container, setContainer] = useState("");
+  const [content, setContent] = useState("");
   const [log, setLog] = useState("");
 
   // Product selector state
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<{ name: string; sku: string; barcode: string; warehouseQty: number } | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<{ name: string; sku: string; barcode: string; warehouseQty: number; supplierSku: string; packagingType?: string; content?: string } | null>(null);
   const [contextStock, setContextStock] = useState<number | undefined>();
   const [contextOnTheWay, setContextOnTheWay] = useState<number | undefined>();
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -101,6 +103,9 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         const match = products.find((p) => p.sku === initialData.dermaSku);
         if (match) {
           setSelectedProduct(match);
+          setSupplierSku(match.supplierSku ?? "");
+          setContainer(match.packagingType ?? "");
+          setContent(match.content ?? "");
         } else {
           // Create a synthetic selected product for display
           setSelectedProduct({
@@ -108,11 +113,22 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
             sku: initialData.dermaSku,
             barcode: "",
             warehouseQty: initialData.currentStock ?? 0,
+            supplierSku: "",
           });
         }
       }
     }
   }, [open, initialData, products]);
+
+  // Reset mutation and fields when dialog opens (without initialData)
+  useEffect(() => {
+    if (open) {
+      mutation.reset();
+      if (!initialData) {
+        resetFields();
+      }
+    }
+  }, [open]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -131,6 +147,9 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setSelectedProduct(product);
     setProductName(product.name);
     setDermaSku(product.sku);
+    setSupplierSku(product.supplierSku ?? "");
+    setContainer(product.packagingType ?? "");
+    setContent(product.content ?? "");
     setSearchQuery(product.name);
     setShowDropdown(false);
     setContextStock(product.warehouseQty);
@@ -146,6 +165,9 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setSelectedProduct(null);
     setProductName("");
     setDermaSku("");
+    setSupplierSku("");
+    setContainer("");
+    setContent("");
     setSearchQuery("");
     setContextStock(undefined);
     setContextOnTheWay(undefined);
@@ -160,6 +182,8 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setQuantity("");
     setProductName("");
     setExpectedDate("");
+    setContainer("");
+    setContent("");
     setLog("");
     setSearchQuery("");
     setSelectedProduct(null);
@@ -178,6 +202,8 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         quantity: quantity.trim(),
         productName: productName.trim(),
         expectedDate: expectedDate.trim(),
+        container: container.trim() || undefined,
+        content: content.trim() || undefined,
         log: log.trim() || undefined,
       },
       {

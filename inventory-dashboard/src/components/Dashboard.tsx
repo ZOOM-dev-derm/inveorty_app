@@ -6,7 +6,7 @@ import { useInventoryOverview, useCriticalDates, useMinAmount, useOpenOrders } f
 import { useSyncMissingProducts } from "@/hooks/useSheetData";
 import { AddProductDialog } from "./AddProductDialog";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { Package, RefreshCw, Search, BarChart3, ShoppingCart, AlertTriangle, Loader2 } from "lucide-react";
+import { RefreshCw, Search, BarChart3, ShoppingCart, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -55,12 +55,11 @@ function DashboardContent() {
     let result = items.filter((item) => minAmountSkus.has(item.sku));
 
     if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      result = result.filter(
-        (item) =>
-          item.productName.toLowerCase().includes(q) ||
-          item.sku.toLowerCase().includes(q)
-      );
+      const terms = search.trim().toLowerCase().split(/\s+/);
+      result = result.filter((item) => {
+        const searchable = `${item.productName || ""} ${item.sku || ""}`.toLowerCase();
+        return terms.every((term) => searchable.includes(term));
+      });
     }
 
     // Build set of SKUs with open (non-received) orders
@@ -92,126 +91,114 @@ function DashboardContent() {
 
   const totalStock = items?.reduce((sum, i) => sum + i.currentStock, 0) ?? 0;
   const productsOnTheWay = items?.filter((i) => i.onTheWay > 0).length ?? 0;
-  const lowStockCount = items?.filter((i) => i.currentStock < 15).length ?? 0;
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50/30 via-background to-purple-50/20" dir="rtl">
-      {/* Header */}
-      <header className="sticky top-0 z-10 backdrop-blur-xl bg-background/90 border-b border-border/50 shadow-sm">
-        <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-2.5 rounded-2xl bg-primary/10 ring-1 ring-primary/20">
-                <Package className="h-7 w-7 text-primary" />
+      {/* Sticky Header with Search, Metrics, and Actions */}
+      <header className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border/40 shadow-sm">
+        <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-3">
+          <div className="flex flex-col md:flex-row items-center gap-4 justify-between">
+
+            {/* Right Side: Search & Metrics */}
+            <div className="flex items-center gap-4 flex-1 w-full md:w-auto">
+              <div className="relative flex-1 max-w-sm lg:max-w-md">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="חפש מוצר לפי שם או מק״ט..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full h-10 pr-10 pl-4 rounded-lg border border-input bg-background text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">דשבורד מלאי והזמנות</h1>
-                <p className="text-xs text-muted-foreground font-medium mt-0.5">ניתוח מגמות ותחזית מלאי · Dermalosophy</p>
+
+              {/* Metrics - Small next to search */}
+              <div className="hidden lg:flex items-center gap-4 text-sm text-muted-foreground whitespace-nowrap px-2">
+                <div className="flex items-center gap-1.5 bg-blue-50/50 px-2 py-1 rounded-md border border-blue-100/50">
+                  <span className="text-blue-700 font-medium">סה״כ במלאי:</span>
+                  <span className="font-bold text-blue-900">{totalStock.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-purple-50/50 px-2 py-1 rounded-md border border-purple-100/50">
+                  <span className="text-purple-700 font-medium">הזמנות פתוחות:</span>
+                  <span className="font-bold text-purple-900">{productsOnTheWay}</span>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <AddProductDialog />
-              <AddOrderDialog />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending}
-                className="gap-2 font-medium"
-              >
-                {syncMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                סנכרן מוצרים
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="gap-2 font-medium"
-              >
-                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-                רענן
-              </Button>
+
+            {/* Left Side: Tabs & Actions */}
+            <div className="flex items-center gap-2 w-full md:w-auto justify-end overflow-x-auto pb-1 md:pb-0">
+              <div className="flex gap-1 p-1 rounded-lg bg-muted/80 shrink-0">
+                <button
+                  onClick={() => setActiveTab("graphs")}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "graphs"
+                    ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+                    }`}
+                >
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  גרפים
+                </button>
+                <button
+                  onClick={() => setActiveTab("orders")}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "orders"
+                    ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+                    }`}
+                >
+                  <ShoppingCart className="h-3.5 w-3.5" />
+                  הזמנות
+                </button>
+              </div>
+
+              <div className="h-5 w-px bg-border mx-1 shrink-0" />
+
+              <div className="flex items-center gap-2 shrink-0">
+                <AddProductDialog />
+                <AddOrderDialog />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => syncMutation.mutate()}
+                  disabled={syncMutation.isPending}
+                  title="סנכרן מוצרים"
+                  className="h-8 w-8"
+                >
+                  {syncMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  title="רענן נתונים"
+                  className="h-8 w-8"
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Metrics (Visible only on smaller screens) */}
+          <div className="lg:hidden flex items-center gap-3 mt-3 text-xs text-muted-foreground overflow-x-auto">
+            <div className="flex items-center gap-1.5 bg-blue-50/50 px-2 py-1 rounded-md border border-blue-100/50 whitespace-nowrap">
+              <span className="text-blue-700 font-medium">סה״כ במלאי:</span>
+              <span className="font-bold text-blue-900">{totalStock.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-purple-50/50 px-2 py-1 rounded-md border border-purple-100/50 whitespace-nowrap">
+              <span className="text-purple-700 font-medium">הזמנות פתוחות:</span>
+              <span className="font-bold text-purple-900">{productsOnTheWay}</span>
             </div>
           </div>
         </div>
       </header>
 
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-6 space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-emerald-50/50 via-white to-emerald-50/30 border-emerald-200/40 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="pt-5 pb-4 px-5">
-              <div className="text-xs text-emerald-700 font-semibold">סה״כ מוצרים</div>
-              <div className="text-3xl font-bold text-emerald-800 mt-1">{items?.length ?? "—"}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-blue-50/50 via-white to-cyan-50/30 border-blue-200/40 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="pt-5 pb-4 px-5">
-              <div className="text-xs text-blue-700 font-semibold">סה״כ מלאי</div>
-              <div className="text-3xl font-bold text-blue-800 mt-1">{totalStock.toLocaleString()}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-purple-50/50 via-white to-purple-50/30 border-purple-200/40 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="pt-5 pb-4 px-5">
-              <div className="text-xs text-purple-700 font-semibold flex items-center gap-1.5">
-                <ShoppingCart className="h-3.5 w-3.5" /> בדרך
-              </div>
-              <div className="text-3xl font-bold text-purple-800 mt-1">{productsOnTheWay}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-rose-50/50 via-white to-pink-50/30 border-rose-200/40 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="pt-5 pb-4 px-5">
-              <div className="text-xs text-rose-700 font-semibold flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5" /> מלאי נמוך
-              </div>
-              <div className="text-3xl font-bold text-rose-800 mt-1">{lowStockCount}</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Search + Tabs */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="חפש מוצר לפי שם או מק״ט..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-11 pr-10 pl-4 rounded-xl border border-input bg-white text-sm font-medium placeholder:text-muted-foreground placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
-            />
-          </div>
-          <div className="flex gap-1 p-1 rounded-xl bg-muted/80 shadow-inner">
-            <button
-              onClick={() => setActiveTab("graphs")}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === "graphs"
-                  ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/50"
-              }`}
-            >
-              <BarChart3 className="h-4 w-4" />
-              גרפים
-            </button>
-            <button
-              onClick={() => setActiveTab("orders")}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === "orders"
-                  ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/50"
-              }`}
-            >
-              <ShoppingCart className="h-4 w-4" />
-              הזמנות
-            </button>
-          </div>
-        </div>
-
         {/* Content */}
         {activeTab === "graphs" && (
           <>

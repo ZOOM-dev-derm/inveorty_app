@@ -81,6 +81,9 @@ export async function fetchProducts(): Promise<Product[]> {
       sku: row["מקט דרמלוסופי"]?.trim() ?? "",
       barcode: row["ברקוד"]?.trim() ?? "",
       warehouseQty: parseInt(row["כמות במחסן"] ?? "0", 10) || 0,
+      supplierSku: row["מק\"ט פאר פארם"]?.trim() ?? "",
+      packagingType: row["סוג אריזה"]?.trim() ?? "",
+      content: row["תכולה"]?.trim() ?? "",
     }));
 }
 
@@ -154,7 +157,7 @@ export async function fetchOrders(): Promise<Order[]> {
 
       return {
         orderDate: orderDateStr,
-        supplierSku: row["מק\"ט פאר-פארם"]?.trim() ?? "",
+        supplierSku: row["מק\"ט פאר פארם"]?.trim() ?? "",
         dermaSku: row[dermaSkuKey]?.trim() ?? "",
         quantity: (row[qtyKey]?.trim() ?? "").replace(/,/g, ""),
         productName: row["שם פריט"]?.trim() ?? "",
@@ -200,6 +203,8 @@ export async function addOrder(data: {
   quantity: string;
   productName: string;
   expectedDate: string;
+  container?: string;
+  content?: string;
   log?: string;
 }) {
   return postToSheet("addOrder", data);

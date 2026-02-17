@@ -46,7 +46,7 @@ export function InventoryOverview() {
                 <TableRow>
                   <TableHead>שם מוצר</TableHead>
                   <TableHead>מלאי נוכחי</TableHead>
-                  <TableHead>בדרך</TableHead>
+                  <TableHead>הזמנות פתוחות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

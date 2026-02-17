@@ -8,6 +8,9 @@ export interface Product {
   sku: string;
   barcode: string;
   warehouseQty: number;  // כמות במחסן
+  supplierSku: string;   // מק"ט פאר-פארם
+  packagingType: string; // סוג אריזה → maps to orders' מיכל
+  content: string;       // תכולה
 }
 
 export interface Order {

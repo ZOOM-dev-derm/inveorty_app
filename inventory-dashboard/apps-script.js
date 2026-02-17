@@ -77,17 +77,31 @@ function addOrder(ss, data) {
   var sheet = getSheetByGid(ss, ORDERS_GID);
   if (!sheet) return { success: false, error: "Orders sheet not found" };
 
-  // Headers: תאריך הזמנה | מק"ט פאר-פארם | קוד דרמה | כמות סה"כ | שם פריט | התקבל | תאריך צפי | לוג
-  sheet.appendRow([
-    data.orderDate || "",
-    data.supplierSku || "",
-    data.dermaSku || "",
-    data.quantity || "",
-    data.productName || "",
-    "", // received - empty by default
-    data.expectedDate || "",
-    data.log || "",
-  ]);
+  // Read header row to find correct column positions
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var numCols = headers.length;
+
+  // Map incoming data fields to sheet header names
+  var fieldMapping = {
+    "תאריך הזמנה": data.orderDate || "",
+    "מק\"ט פאר-פארם": data.supplierSku || "",
+    "כמות סה\"כ": data.quantity || "",
+    "מיכל": data.container || "",
+    "תכולה": data.content || "",
+    "שם פריט": data.productName || "",
+    "קוד דרמה": data.dermaSku || "",
+    "תאריך צפי": data.expectedDate || "",
+    "לוג": data.log || "",
+  };
+
+  // Build row array matching header positions
+  var row = [];
+  for (var i = 0; i < numCols; i++) {
+    var header = headers[i].toString().trim();
+    row.push(fieldMapping.hasOwnProperty(header) ? fieldMapping[header] : "");
+  }
+
+  sheet.appendRow(row);
   return { success: true };
 }
 
