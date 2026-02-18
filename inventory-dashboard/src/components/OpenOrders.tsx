@@ -81,7 +81,7 @@ function parseCommentLog(raw: string): { date: string; text: string }[] {
   return parsed;
 }
 
-function OrderItem({ order, index, mode }: { order: Order; index: number; mode: GroupMode }) {
+function OrderItem({ order, index, mode, expanded }: { order: Order; index: number; mode: GroupMode; expanded?: boolean }) {
   const statusMutation = useUpdateOrderStatus();
   const commentsMutation = useUpdateOrderComments();
   const { date: expectedDate, estimated } = getExpectedDate(order);
@@ -115,8 +115,8 @@ function OrderItem({ order, index, mode }: { order: Order; index: number; mode: 
     <div
       className="order-detail py-3 border-b border-border/20 last:border-0"
       style={{
-        opacity: 0,
-        transform: "translateY(8px)",
+        opacity: expanded ? 1 : 0,
+        transform: expanded ? "translateY(0)" : "translateY(8px)",
         transition: "opacity 0.3s ease, transform 0.3s ease",
         transitionDelay: `${index * 40}ms`,
       }}
@@ -252,17 +252,21 @@ function OrderItem({ order, index, mode }: { order: Order; index: number; mode: 
 
 function OrderGroupCard({ group, mode }: { group: OrderGroup; mode: GroupMode }) {
   const Icon = mode === "date" ? Calendar : Package;
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div
-      className={`group relative rounded-xl border-2 p-4 transition-all duration-300 cursor-default shadow-sm
+      className={`relative rounded-xl border-2 p-4 transition-all duration-300 shadow-sm
         ${group.hasOverdue
           ? "border-destructive/40 bg-gradient-to-br from-rose-50/50 via-white to-pink-50/30 hover:border-destructive/60 hover:shadow-lg hover:shadow-red-100/50"
           : "border-border/50 bg-gradient-to-br from-white via-background to-slate-50/30 hover:border-primary/30 hover:shadow-md"
         }`}
     >
-      {/* Default state — always visible */}
-      <div className="flex items-center justify-between">
+      {/* Header — always visible, tappable */}
+      <div
+        className="flex items-center justify-between cursor-pointer select-none"
+        onClick={() => setExpanded((v) => !v)}
+      >
         <div className="flex items-center gap-2.5">
           <div className={`p-2 rounded-xl ${group.hasOverdue ? "bg-destructive/10 ring-1 ring-destructive/20" : "bg-primary/10 ring-1 ring-primary/20"}`}>
             <Icon className={`h-4 w-4 ${group.hasOverdue ? "text-destructive" : "text-primary"}`} />
@@ -275,21 +279,32 @@ function OrderGroupCard({ group, mode }: { group: OrderGroup; mode: GroupMode })
             </div>
           </div>
         </div>
-        {group.hasOverdue && (
-          <div className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-destructive" />
-            <span className="text-xs font-medium text-destructive">באיחור</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {group.hasOverdue && (
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-destructive" />
+              <span className="text-xs font-medium text-destructive">באיחור</span>
+            </div>
+          )}
+          <svg
+            className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${expanded ? "rotate-180" : ""}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
       </div>
 
-      {/* Hover reveal — order details */}
-      <div className="mt-3 max-h-0 overflow-hidden transition-all duration-300 group-hover:max-h-[2000px]">
+      {/* Expandable order details */}
+      <div
+        className="mt-3 overflow-hidden transition-all duration-300"
+        style={{ maxHeight: expanded ? `${group.orders.length * 120 + 80}px` : "0px" }}
+      >
         <div className="pt-2 border-t border-border/30">
           {group.orders.map((order, idx) => (
-            <OrderItem key={`${order.supplierSku}-${order.rowIndex}`} order={order} index={idx} mode={mode} />
+            <OrderItem key={`${order.supplierSku}-${order.rowIndex}`} order={order} index={idx} mode={mode} expanded={expanded} />
           ))}
-          <div className="text-[10px] text-muted-foreground mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-300">
+          <div className={`text-[10px] text-muted-foreground mt-2 transition-opacity duration-500 delay-300 ${expanded ? "opacity-100" : "opacity-0"}`}>
             * תאריך משוער (תאריך הזמנה + 3 חודשים)
           </div>
         </div>
@@ -410,13 +425,7 @@ export function OpenOrders({ search }: { search: string }) {
         </div>
       )}
 
-      {/* Inject hover animation style */}
-      <style>{`
-        .group:hover .order-detail {
-          opacity: 1 !important;
-          transform: translateY(0) !important;
-        }
-      `}</style>
+      {/* No injected hover styles needed — expansion is JS-driven */}
     </div>
   );
 }

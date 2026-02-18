@@ -132,8 +132,8 @@ function DashboardContent() {
                 <button
                   onClick={() => setActiveTab("graphs")}
                   className={`flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "graphs"
-                      ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
-                      : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+                    ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/50"
                     }`}
                 >
                   <BarChart3 className="h-3.5 w-3.5" />
@@ -143,8 +143,8 @@ function DashboardContent() {
                 <button
                   onClick={() => setActiveTab("orders")}
                   className={`flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "orders"
-                      ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
-                      : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+                    ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/50"
                     }`}
                 >
                   <ShoppingCart className="h-3.5 w-3.5" />
@@ -200,7 +200,7 @@ function DashboardContent() {
         </div>
       </header>
 
-      <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-6 space-y-6">
+      <div className="max-w-[1600px] mx-auto px-3 md:px-8 py-3 md:py-6 space-y-4 md:space-y-6">
         {/* Content */}
         {activeTab === "graphs" && (
           <>

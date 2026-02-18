@@ -125,6 +125,8 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2) {
+      // Prevent browser native pinch-zoom
+      e.preventDefault();
       touchRef.current = {
         startDist: getTouchDist(e.touches),
         startRange: { ...zoomRange },
@@ -162,21 +164,20 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
         newStart = Math.max(0, newEnd - newRange);
       }
       setZoomRange({ start: newStart, end: newEnd });
-    } else if (touchRef.current.fingers === 1 && e.touches.length === 1 && isZoomed) {
-      // Single-finger pan
+    } else if (touchRef.current.fingers === 1 && e.touches.length === 1) {
+      // Single-finger pan — use functional updater to avoid stale closure
       const deltaX = e.touches[0].clientX - touchRef.current.lastX;
       touchRef.current.lastX = e.touches[0].clientX;
-      const range = zoomRange.end - zoomRange.start;
-      // Pan direction: dragging right moves view left (earlier data) in RTL context
       const step = Math.round(deltaX / 10);
       if (step !== 0) {
         setZoomRange(prev => {
+          const range = prev.end - prev.start;
           const newStart = Math.max(0, Math.min(dataLen - 1 - range, prev.start - step));
           return { start: newStart, end: newStart + range };
         });
       }
     }
-  }, [chartData.length, isZoomed, zoomRange]);
+  }, [chartData.length]);
 
   const handleTouchEnd = useCallback(() => {
     touchRef.current = null;
@@ -386,22 +387,22 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
           onTouchEnd={handleTouchEnd}
         >
           {/* Zoom control buttons */}
-          <div className="absolute top-1 left-1 md:top-2 md:left-2 z-10 flex items-center gap-0.5 md:gap-1 bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 p-0.5 shadow-sm scale-90 md:scale-100 origin-top-left">
-            <Button variant="ghost" size="icon" className="h-6 w-6 md:h-7 md:w-7" onClick={zoomIn} title="זום פנימה">
-              <ZoomIn className="h-3 md:h-3.5 w-3 md:w-3.5" />
+          <div className="absolute top-1 left-1 md:top-2 md:left-2 z-10 flex items-center gap-0.5 md:gap-1 bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 p-0.5 shadow-sm">
+            <Button variant="ghost" size="icon" className="h-8 w-8 md:h-7 md:w-7" onClick={zoomIn} title="זום פנימה">
+              <ZoomIn className="h-4 md:h-3.5 w-4 md:w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-6 w-6 md:h-7 md:w-7" onClick={zoomOut} title="זום החוצה">
-              <ZoomOut className="h-3 md:h-3.5 w-3 md:w-3.5" />
+            <Button variant="ghost" size="icon" className="h-8 w-8 md:h-7 md:w-7" onClick={zoomOut} title="זום החוצה">
+              <ZoomOut className="h-4 md:h-3.5 w-4 md:w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-6 w-6 md:h-7 md:w-7" onClick={resetZoom} title="איפוס תצוגה" disabled={!isZoomed}>
-              <RotateCcw className="h-3 md:h-3.5 w-3 md:w-3.5" />
+            <Button variant="ghost" size="icon" className="h-8 w-8 md:h-7 md:w-7" onClick={resetZoom} title="איפוס תצוגה" disabled={!isZoomed}>
+              <RotateCcw className="h-4 md:h-3.5 w-4 md:w-3.5" />
             </Button>
-            <div className="w-px h-3 md:h-4 bg-border/50" />
-            <Button variant="ghost" size="icon" className="h-6 w-6 md:h-7 md:w-7" onClick={panLeft} title="הזז שמאלה" disabled={zoomRange.start === 0}>
-              <ChevronLeft className="h-3 md:h-3.5 w-3 md:w-3.5" />
+            <div className="w-px h-4 bg-border/50" />
+            <Button variant="ghost" size="icon" className="h-8 w-8 md:h-7 md:w-7" onClick={panLeft} title="הזז שמאלה" disabled={zoomRange.start === 0}>
+              <ChevronLeft className="h-4 md:h-3.5 w-4 md:w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-6 w-6 md:h-7 md:w-7" onClick={panRight} title="הזז ימינה" disabled={zoomRange.end >= chartData.length - 1}>
-              <ChevronRight className="h-3 md:h-3.5 w-3 md:w-3.5" />
+            <Button variant="ghost" size="icon" className="h-8 w-8 md:h-7 md:w-7" onClick={panRight} title="הזז ימינה" disabled={zoomRange.end >= chartData.length - 1}>
+              <ChevronRight className="h-4 md:h-3.5 w-4 md:w-3.5" />
             </Button>
           </div>
           <ResponsiveContainer width="100%" height="100%">
