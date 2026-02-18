@@ -26,7 +26,13 @@
       "Bash(git push:*)",
       "Bash(git branch:*)",
       "Bash(gh api:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "WebFetch(domain:script.google.com)",
+      "Bash(node -e \"\nfetch\\(''https://docs.google.com/spreadsheets/d/1Cqr5SHHbH3MtCKU5h3GAShGG5NtpPA6LNCLNk16EH_Q/export?format=csv&gid=75015255''\\)\n  .then\\(r => r.text\\(\\)\\)\n  .then\\(csv => {\n    const lines = csv.split\\(''\\\\n''\\);\n    console.log\\(''HEADER:'', lines[0]\\);\n    console.log\\(''ROW 2:'', lines[1]\\);\n  }\\)\n  .catch\\(e => console.error\\(e\\)\\);\n\")",
+      "Bash(node -e:*)",
+      "Bash(git status:*)",
+      "Bash(vercel:*)",
+      "Bash(wc -l:*)"
     ]
   }
 }

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const f=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).tool_input?.file_path||''; if(!f.includes('CLAUDE.md')){console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'PostToolUse',additionalContext:'Reminder: You just edited a source file. If the change affects project architecture, components, data flow, conventions, or commands, update CLAUDE.md to reflect it.'}}))}\" 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}
