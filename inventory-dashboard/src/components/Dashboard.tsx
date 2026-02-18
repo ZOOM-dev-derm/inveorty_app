@@ -6,7 +6,7 @@ import { useInventoryOverview, useCriticalDates, useMinAmount, useOpenOrders, us
 import { useSyncMissingProducts } from "@/hooks/useSheetData";
 import { AddProductDialog } from "./AddProductDialog";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { RefreshCw, Search, BarChart3, ShoppingCart, Loader2, Pin } from "lucide-react";
+import { RefreshCw, Search, BarChart3, ShoppingCart, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,7 +30,6 @@ function DashboardContent() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("graphs");
   const [pinnedSku, setPinnedSku] = useState<string | null>(null);
-  const [hoveredSku, setHoveredSku] = useState<string | null>(null);
 
   const { data: items, isLoading, error } = useInventoryOverview();
   const criticalDates = useCriticalDates(items ?? []);
@@ -62,6 +61,14 @@ function DashboardContent() {
     // Only show products that have a minimum amount defined
     const minAmountSkus = new Set(minAmountData?.map((m) => m.sku) ?? []);
     let result = items.filter((item) => minAmountSkus.has(item.sku));
+
+    // Deduplicate by sku — Products sheet may have multiple rows per SKU (label variants, etc.)
+    const seenSkus = new Set<string>();
+    result = result.filter((item) => {
+      if (seenSkus.has(item.sku)) return false;
+      seenSkus.add(item.sku);
+      return true;
+    });
 
     if (search.trim()) {
       const terms = search.trim().toLowerCase().split(/\s+/);
@@ -103,16 +110,6 @@ function DashboardContent() {
     });
   }, [items, search, criticalDates, minAmountData, openOrders, supplierSkuByDermaSku]);
 
-  const openOrdersByDermaSku = useMemo(() => {
-    const map = new Map<string, number>();
-    openOrders?.forEach(o => {
-      map.set(o.dermaSku, (map.get(o.dermaSku) ?? 0) + 1);
-    });
-    return map;
-  }, [openOrders]);
-
-  const isOpen = (sku: string) =>
-    sku === pinnedSku || (sku === hoveredSku && pinnedSku === null);
 
   const handleRowClick = (sku: string) =>
     setPinnedSku(prev => prev === sku ? null : sku);
@@ -267,34 +264,30 @@ function DashboardContent() {
                 </div>
                 <div className="flex flex-col gap-2">
                   {filteredItems.map((item) => {
-                    const open = isOpen(item.sku);
-                    const pinned = pinnedSku === item.sku;
-                    const orderCount = openOrdersByDermaSku.get(item.sku) ?? 0;
+                    const open = pinnedSku === item.sku;
                     return (
                       <div key={item.sku}>
                         {/* Collapsed row — always visible */}
                         <div
                           className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border bg-card shadow-sm cursor-pointer transition-colors select-none
                             ${open ? "border-primary/30 bg-primary/5 rounded-b-none border-b-0" : "hover:bg-muted/30"}`}
-                          onMouseEnter={() => setHoveredSku(item.sku)}
-                          onMouseLeave={() => setHoveredSku(null)}
                           onClick={() => handleRowClick(item.sku)}
                         >
                           <span className="font-semibold text-sm truncate flex-1">{item.productName}</span>
-                          <span className="text-xs text-muted-foreground shrink-0">{item.sku}</span>
-                          <span className="text-xs font-medium shrink-0">{item.currentStock} יח׳</span>
-                          {orderCount > 0 && (
-                            <span className="text-xs text-primary shrink-0">{orderCount} הזמנות</span>
-                          )}
-                          {pinned && <Pin className="h-3.5 w-3.5 text-primary shrink-0" />}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-sm font-bold">{item.sku}</span>
+                            {supplierSkuByDermaSku.get(item.sku) && (
+                              <span className="text-xs text-muted-foreground">
+                                מק&quot;ט פאר פארם: {supplierSkuByDermaSku.get(item.sku)}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Expanded graph — visible on hover or when pinned */}
+                        {/* Expanded graph — visible when clicked */}
                         {open && (
                           <div
                             className="border border-primary/30 border-t-0 rounded-b-xl overflow-hidden"
-                            onMouseEnter={() => setHoveredSku(item.sku)}
-                            onMouseLeave={() => setHoveredSku(null)}
                           >
                             <ProductGraph
                               sku={item.sku}
