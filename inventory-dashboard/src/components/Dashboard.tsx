@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OpenOrders } from "./OpenOrders";
 
 import { ProductGraph } from "./ProductGraph";
-import { useInventoryOverview, useCriticalDates, useMinAmount, useOpenOrders } from "@/hooks/useSheetData";
+import { useInventoryOverview, useCriticalDates, useMinAmount, useOpenOrders, useProducts } from "@/hooks/useSheetData";
 import { useSyncMissingProducts } from "@/hooks/useSheetData";
 import { AddProductDialog } from "./AddProductDialog";
 import { AddOrderDialog } from "./AddOrderDialog";
@@ -36,6 +36,7 @@ function DashboardContent() {
   const criticalDates = useCriticalDates(items ?? []);
   const { data: minAmountData } = useMinAmount();
   const { data: openOrders } = useOpenOrders();
+  const { data: products } = useProducts();
   const syncMutation = useSyncMissingProducts();
 
   const handleNavigateToOrders = useCallback((productName: string) => {
@@ -49,6 +50,12 @@ function DashboardContent() {
     setRefreshing(false);
   };
 
+  const supplierSkuByDermaSku = useMemo(() => {
+    const map = new Map<string, string>();
+    products?.forEach(p => map.set(p.sku, p.supplierSku));
+    return map;
+  }, [products]);
+
   const filteredItems = useMemo(() => {
     if (!items) return [];
 
@@ -59,8 +66,13 @@ function DashboardContent() {
     if (search.trim()) {
       const terms = search.trim().toLowerCase().split(/\s+/);
       result = result.filter((item) => {
-        const searchable = `${item.productName || ""} ${item.sku || ""}`.toLowerCase();
-        return terms.every((term) => searchable.includes(term));
+        const nameLower = (item.productName || "").toLowerCase();
+        const dermaSku = (item.sku || "").toLowerCase();
+        return terms.every(
+          (term) =>
+            nameLower.includes(term) ||
+            dermaSku.startsWith(term)
+        );
       });
     }
 
@@ -89,7 +101,7 @@ function DashboardContent() {
       if (!da && db) return 1;
       return 0;
     });
-  }, [items, search, criticalDates, minAmountData, openOrders]);
+  }, [items, search, criticalDates, minAmountData, openOrders, supplierSkuByDermaSku]);
 
   const openOrdersByDermaSku = useMemo(() => {
     const map = new Map<string, number>();
