@@ -6,7 +6,7 @@ import { useInventoryOverview, useCriticalDates, useMinAmount, useOpenOrders } f
 import { useSyncMissingProducts } from "@/hooks/useSheetData";
 import { AddProductDialog } from "./AddProductDialog";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { RefreshCw, Search, BarChart3, ShoppingCart, Loader2 } from "lucide-react";
+import { RefreshCw, Search, BarChart3, ShoppingCart, Loader2, Pin } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,6 +29,8 @@ function DashboardContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("graphs");
+  const [pinnedSku, setPinnedSku] = useState<string | null>(null);
+  const [hoveredSku, setHoveredSku] = useState<string | null>(null);
 
   const { data: items, isLoading, error } = useInventoryOverview();
   const criticalDates = useCriticalDates(items ?? []);
@@ -88,6 +90,20 @@ function DashboardContent() {
       return 0;
     });
   }, [items, search, criticalDates, minAmountData, openOrders]);
+
+  const openOrdersByDermaSku = useMemo(() => {
+    const map = new Map<string, number>();
+    openOrders?.forEach(o => {
+      map.set(o.dermaSku, (map.get(o.dermaSku) ?? 0) + 1);
+    });
+    return map;
+  }, [openOrders]);
+
+  const isOpen = (sku: string) =>
+    sku === pinnedSku || (sku === hoveredSku && pinnedSku === null);
+
+  const handleRowClick = (sku: string) =>
+    setPinnedSku(prev => prev === sku ? null : sku);
 
   const totalStock = items?.reduce((sum, i) => sum + i.currentStock, 0) ?? 0;
   const productsOnTheWay = items?.filter((i) => i.onTheWay > 0).length ?? 0;
@@ -237,17 +253,49 @@ function DashboardContent() {
                     {search && ` (מסוננים מתוך ${items?.length ?? 0})`}
                   </Badge>
                 </div>
-                <div className="grid gap-4 grid-cols-1">
-                  {filteredItems.map((item) => (
-                    <ProductGraph
-                      key={item.sku}
-                      sku={item.sku}
-                      productName={item.productName}
-                      currentStock={item.currentStock}
-                      onTheWay={item.onTheWay}
-                      onOrdersClick={handleNavigateToOrders}
-                    />
-                  ))}
+                <div className="flex flex-col gap-2">
+                  {filteredItems.map((item) => {
+                    const open = isOpen(item.sku);
+                    const pinned = pinnedSku === item.sku;
+                    const orderCount = openOrdersByDermaSku.get(item.sku) ?? 0;
+                    return (
+                      <div key={item.sku}>
+                        {/* Collapsed row — always visible */}
+                        <div
+                          className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border bg-card shadow-sm cursor-pointer transition-colors select-none
+                            ${open ? "border-primary/30 bg-primary/5 rounded-b-none border-b-0" : "hover:bg-muted/30"}`}
+                          onMouseEnter={() => setHoveredSku(item.sku)}
+                          onMouseLeave={() => setHoveredSku(null)}
+                          onClick={() => handleRowClick(item.sku)}
+                        >
+                          <span className="font-semibold text-sm truncate flex-1">{item.productName}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{item.sku}</span>
+                          <span className="text-xs font-medium shrink-0">{item.currentStock} יח׳</span>
+                          {orderCount > 0 && (
+                            <span className="text-xs text-primary shrink-0">{orderCount} הזמנות</span>
+                          )}
+                          {pinned && <Pin className="h-3.5 w-3.5 text-primary shrink-0" />}
+                        </div>
+
+                        {/* Expanded graph — visible on hover or when pinned */}
+                        {open && (
+                          <div
+                            className="border border-primary/30 border-t-0 rounded-b-xl overflow-hidden"
+                            onMouseEnter={() => setHoveredSku(item.sku)}
+                            onMouseLeave={() => setHoveredSku(null)}
+                          >
+                            <ProductGraph
+                              sku={item.sku}
+                              productName={item.productName}
+                              currentStock={item.currentStock}
+                              onTheWay={item.onTheWay}
+                              onOrdersClick={handleNavigateToOrders}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}
