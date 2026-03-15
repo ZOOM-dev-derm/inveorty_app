@@ -30,8 +30,8 @@ function DashboardContent() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("graphs");
   const [pinnedSku, setPinnedSku] = useState<string | null>(null);
-  const [supplierFilter, setSupplierFilter] = useState<string>("פאר פארם");
-  const [stockFilter, setStockFilter] = useState<"all" | "belowMin">("belowMin");
+  const [supplierFilter, setSupplierFilter] = useState<string>("");
+  const [stockFilter, setStockFilter] = useState<"all" | "belowMin">("all");
   const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
   const supplierDropdownRef = useRef<HTMLDivElement>(null);
 
