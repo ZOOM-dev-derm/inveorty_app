@@ -138,8 +138,15 @@ function OrderItem({ order, index, mode, expanded }: { order: Order; index: numb
               </Badge>
             </div>
             {(order.dermaSku || order.supplierSku) && (
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                {[order.dermaSku, order.supplierSku].filter(Boolean).join(" | ")}
+              <div className="flex items-center gap-2 mt-0.5">
+                {order.dermaSku && (
+                  <span className="text-sm font-bold">{order.dermaSku}</span>
+                )}
+                {order.supplierSku && (
+                  <span className="text-[11px] text-muted-foreground">
+                    מק&quot;ט פאר פארם: {order.supplierSku}
+                  </span>
+                )}
               </div>
             )}
             {lastTwoComments.length > 0 && (

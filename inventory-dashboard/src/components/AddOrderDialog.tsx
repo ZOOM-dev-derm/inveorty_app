@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useAddOrder, useProducts, useMinAmount } from "@/hooks/useSheetData";
+import { useAddOrder, useProducts } from "@/hooks/useSheetData";
 import {
   Dialog,
   DialogContent,
@@ -47,33 +47,32 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
   const [quantity, setQuantity] = useState("");
   const [productName, setProductName] = useState("");
   const [expectedDate, setExpectedDate] = useState("");
-  const [container, setContainer] = useState("");
-  const [content, setContent] = useState("");
   const [log, setLog] = useState("");
 
   // Product selector state
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<{ name: string; sku: string; barcode: string; warehouseQty: number; supplierSku: string; packagingType?: string; content?: string } | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<{ name: string; sku: string; manufacturer: string; warehouseQty: number } | null>(null);
   const [contextStock, setContextStock] = useState<number | undefined>();
   const [contextOnTheWay, setContextOnTheWay] = useState<number | undefined>();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: products } = useProducts();
-  const { data: minAmountData } = useMinAmount();
   const mutation = useAddOrder();
 
-  // Build min amount lookup
+  // Build min amount lookup from products
   const minAmountMap = useMemo(() => {
     const map = new Map<string, number>();
-    if (minAmountData) {
-      for (const m of minAmountData) {
-        map.set(m.sku.trim(), m.minAmount);
+    if (products) {
+      for (const p of products) {
+        if (p.minAmount > 0) {
+          map.set(p.sku.trim(), p.minAmount);
+        }
       }
     }
     return map;
-  }, [minAmountData]);
+  }, [products]);
 
   // Filter products by search query
   const filteredProducts = useMemo(() => {
@@ -103,17 +102,13 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         const match = products.find((p) => p.sku === initialData.dermaSku);
         if (match) {
           setSelectedProduct(match);
-          setSupplierSku(match.supplierSku ?? "");
-          setContainer(match.packagingType ?? "");
-          setContent(match.content ?? "");
         } else {
           // Create a synthetic selected product for display
           setSelectedProduct({
             name: initialData.productName,
             sku: initialData.dermaSku,
-            barcode: "",
+            manufacturer: "",
             warehouseQty: initialData.currentStock ?? 0,
-            supplierSku: "",
           });
         }
       }
@@ -147,9 +142,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setSelectedProduct(product);
     setProductName(product.name);
     setDermaSku(product.sku);
-    setSupplierSku(product.supplierSku ?? "");
-    setContainer(product.packagingType ?? "");
-    setContent(product.content ?? "");
     setSearchQuery(product.name);
     setShowDropdown(false);
     setContextStock(product.warehouseQty);
@@ -166,8 +158,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setProductName("");
     setDermaSku("");
     setSupplierSku("");
-    setContainer("");
-    setContent("");
     setSearchQuery("");
     setContextStock(undefined);
     setContextOnTheWay(undefined);
@@ -182,8 +172,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setQuantity("");
     setProductName("");
     setExpectedDate("");
-    setContainer("");
-    setContent("");
     setLog("");
     setSearchQuery("");
     setSelectedProduct(null);
@@ -202,8 +190,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         quantity: quantity.trim(),
         productName: productName.trim(),
         expectedDate: expectedDate.trim(),
-        container: container.trim() || undefined,
-        content: content.trim() || undefined,
         log: log.trim() || undefined,
       },
       {
@@ -315,7 +301,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
             {selectedProduct && (
               <div className="text-xs text-muted-foreground flex items-center gap-3">
                 <span>מק״ט: {selectedProduct.sku}</span>
-                {selectedProduct.barcode && <span>ברקוד: {selectedProduct.barcode}</span>}
+                {selectedProduct.manufacturer && <span>ספק: {selectedProduct.manufacturer}</span>}
               </div>
             )}
           </div>

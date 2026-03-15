@@ -2,16 +2,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OpenOrders } from "./OpenOrders";
 
 import { ProductGraph } from "./ProductGraph";
-import { useInventoryOverview, useCriticalDates, useMinAmount, useOpenOrders, useProducts } from "@/hooks/useSheetData";
+import { useInventoryOverview, useCriticalDates, useOpenOrders, useProducts } from "@/hooks/useSheetData";
 import { useSyncMissingProducts } from "@/hooks/useSheetData";
 import { AddProductDialog } from "./AddProductDialog";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { RefreshCw, Search, BarChart3, ShoppingCart, Loader2 } from "lucide-react";
+import { RefreshCw, Search, BarChart3, ShoppingCart, Loader2, ChevronDown, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,10 +30,12 @@ function DashboardContent() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("graphs");
   const [pinnedSku, setPinnedSku] = useState<string | null>(null);
+  const [supplierFilter, setSupplierFilter] = useState<string>("");
+  const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
+  const supplierDropdownRef = useRef<HTMLDivElement>(null);
 
   const { data: items, isLoading, error } = useInventoryOverview();
   const criticalDates = useCriticalDates(items ?? []);
-  const { data: minAmountData } = useMinAmount();
   const { data: openOrders } = useOpenOrders();
   const { data: products } = useProducts();
   const syncMutation = useSyncMissingProducts();
@@ -49,17 +51,39 @@ function DashboardContent() {
     setRefreshing(false);
   };
 
-  const supplierSkuByDermaSku = useMemo(() => {
+  const manufacturerByDermaSku = useMemo(() => {
     const map = new Map<string, string>();
-    products?.forEach(p => map.set(p.sku, p.supplierSku));
+    products?.forEach(p => map.set(p.sku, p.manufacturer));
     return map;
   }, [products]);
+
+  const uniqueSuppliers = useMemo(() => {
+    if (!products) return [];
+    const set = new Set<string>();
+    products.forEach(p => {
+      if (p.manufacturer && p.manufacturer.trim()) set.add(p.manufacturer.trim());
+    });
+    return [...set].sort((a, b) => a.localeCompare(b, "he"));
+  }, [products]);
+
+  // Close supplier dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (supplierDropdownRef.current && !supplierDropdownRef.current.contains(e.target as Node)) {
+        setSupplierDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const filteredItems = useMemo(() => {
     if (!items) return [];
 
     // Only show products that have a minimum amount defined
-    const minAmountSkus = new Set(minAmountData?.map((m) => m.sku) ?? []);
+    const minAmountSkus = new Set(
+      products?.filter((p) => p.minAmount > 0).map((p) => p.sku) ?? []
+    );
     let result = items.filter((item) => minAmountSkus.has(item.sku));
 
     // Deduplicate by sku — Products sheet may have multiple rows per SKU (label variants, etc.)
@@ -69,6 +93,14 @@ function DashboardContent() {
       seenSkus.add(item.sku);
       return true;
     });
+
+    // Filter by supplier
+    if (supplierFilter) {
+      result = result.filter((item) => {
+        const manufacturer = manufacturerByDermaSku.get(item.sku) || "";
+        return manufacturer.trim() === supplierFilter;
+      });
+    }
 
     if (search.trim()) {
       const terms = search.trim().toLowerCase().split(/\s+/);
@@ -108,7 +140,7 @@ function DashboardContent() {
       if (!da && db) return 1;
       return 0;
     });
-  }, [items, search, criticalDates, minAmountData, openOrders, supplierSkuByDermaSku]);
+  }, [items, search, supplierFilter, criticalDates, products, openOrders, manufacturerByDermaSku]);
 
 
   const handleRowClick = (sku: string) =>
@@ -126,7 +158,7 @@ function DashboardContent() {
           <div className="flex flex-col md:flex-row items-center gap-3 md:gap-4 justify-between">
 
             {/* Right Side: Search & Metrics */}
-            <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
+            <div className="flex items-center gap-2 flex-1 w-full md:w-auto">
               <div className="relative flex-1 max-w-full md:max-w-sm lg:max-w-md">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
@@ -136,6 +168,43 @@ function DashboardContent() {
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full h-9 md:h-10 pr-10 pl-4 rounded-lg border border-input bg-background text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                 />
+              </div>
+
+              {/* Supplier filter dropdown */}
+              <div className="relative shrink-0" ref={supplierDropdownRef}>
+                <button
+                  onClick={() => setSupplierDropdownOpen(!supplierDropdownOpen)}
+                  className={`flex items-center gap-1.5 h-9 md:h-10 px-3 rounded-lg border text-sm font-medium transition-all whitespace-nowrap
+                    ${supplierFilter
+                      ? "border-primary/40 bg-primary/5 text-foreground"
+                      : "border-input bg-background text-muted-foreground hover:text-foreground"
+                    } focus:outline-none focus:ring-2 focus:ring-primary/20`}
+                >
+                  <span className="hidden sm:inline">{supplierFilter || "ספק"}</span>
+                  <span className="sm:hidden">{supplierFilter || "ספק"}</span>
+                  {supplierFilter ? (
+                    <X
+                      className="h-3.5 w-3.5 hover:text-destructive"
+                      onClick={(e) => { e.stopPropagation(); setSupplierFilter(""); setSupplierDropdownOpen(false); }}
+                    />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                {supplierDropdownOpen && uniqueSuppliers.length > 0 && (
+                  <div className="absolute top-full mt-1 right-0 z-50 min-w-[180px] max-h-64 overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
+                    {uniqueSuppliers.map((supplier) => (
+                      <button
+                        key={supplier}
+                        onClick={() => { setSupplierFilter(supplier); setSupplierDropdownOpen(false); }}
+                        className={`w-full text-right px-3 py-2 text-sm hover:bg-muted/50 transition-colors
+                          ${supplierFilter === supplier ? "bg-primary/10 font-semibold" : ""}`}
+                      >
+                        {supplier}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Metrics - Desktop */}
@@ -259,7 +328,7 @@ function DashboardContent() {
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-xs">
                     {filteredItems.length} מוצרים
-                    {search && ` (מסוננים מתוך ${items?.length ?? 0})`}
+                    {(search || supplierFilter) && ` (מסוננים מתוך ${items?.length ?? 0})`}
                   </Badge>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -276,9 +345,9 @@ function DashboardContent() {
                           <span className="font-semibold text-sm truncate flex-1">{item.productName}</span>
                           <div className="flex items-center gap-2 shrink-0">
                             <span className="text-sm font-bold">{item.sku}</span>
-                            {supplierSkuByDermaSku.get(item.sku) && (
+                            {manufacturerByDermaSku.get(item.sku) && (
                               <span className="text-xs text-muted-foreground">
-                                מק&quot;ט פאר פארם: {supplierSkuByDermaSku.get(item.sku)}
+                                ספק: {manufacturerByDermaSku.get(item.sku)}
                               </span>
                             )}
                           </div>

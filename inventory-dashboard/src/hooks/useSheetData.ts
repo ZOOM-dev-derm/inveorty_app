@@ -1,18 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { fetchInventory, fetchProducts, fetchOrders, fetchHistory, fetchMinAmount, addProduct, addOrder, updateOrderStatus, updateOrderComments, syncMissingProducts } from "@/services/googleSheets";
-import type { InventoryItem, Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint, MinAmountItem } from "@/types";
+import { fetchProducts, fetchOrders, fetchHistory, addProduct, addOrder, updateOrderStatus, updateOrderComments, syncMissingProducts } from "@/services/googleSheets";
+import type { Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint } from "@/types";
 
 const FIVE_MINUTES = 5 * 60 * 1000;
 const TEN_MINUTES = 10 * 60 * 1000;
-
-export function useInventory() {
-  return useQuery<InventoryItem[]>({
-    queryKey: ["inventory"],
-    queryFn: fetchInventory,
-    refetchInterval: FIVE_MINUTES,
-  });
-}
 
 export function useProducts() {
   return useQuery<Product[]>({
@@ -38,21 +30,13 @@ export function useHistory() {
   });
 }
 
-export function useMinAmount() {
-  return useQuery<MinAmountItem[]>({
-    queryKey: ["minAmount"],
-    queryFn: fetchMinAmount,
-    refetchInterval: TEN_MINUTES,
-  });
-}
-
 export function useProductForecast(sku: string, currentStock: number) {
   const { data: history, isLoading: histLoading, error: histError } = useHistory();
   const { data: orders, isLoading: ordLoading, error: ordError } = useOrders();
-  const { data: minAmountData, isLoading: minLoading, error: minError } = useMinAmount();
+  const { data: products, isLoading: prodLoading, error: prodError } = useProducts();
 
-  const isLoading = histLoading || ordLoading || minLoading;
-  const error = histError || ordError || minError;
+  const isLoading = histLoading || ordLoading || prodLoading;
+  const error = histError || ordError || prodError;
 
   let chartData: ForecastPoint[] = [];
   let declineRate = 0;
@@ -60,15 +44,15 @@ export function useProductForecast(sku: string, currentStock: number) {
   let realRate = 0; // actual linear regression rate (units/day)
   let minRate = 0;  // min-based rate (units/day)
 
-  // Find min amount for this SKU
-  if (minAmountData) {
+  // Find min amount for this SKU from products
+  if (products) {
     const trimmedSku = sku.trim();
-    const found = minAmountData.find((m) => m.sku.trim() === trimmedSku);
-    if (found) {
+    const found = products.find((p) => p.sku.trim() === trimmedSku);
+    if (found && found.minAmount > 0) {
       minAmount = found.minAmount;
       minRate = -(minAmount / 180); // negative = decline, units per day
     } else {
-      console.debug(`[useProductForecast] SKU "${sku}" NOT found in minAmountData. Available SKUs:`, minAmountData.map(m => m.sku));
+      console.debug(`[useProductForecast] SKU "${sku}" NOT found in products or has no minAmount.`);
     }
   }
 
@@ -111,21 +95,26 @@ export function useProductForecast(sku: string, currentStock: number) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      chartData = skuHistory.map((h, i) => ({
+      chartData = skuHistory.map((h) => ({
         date: formatDateShort(h.dateObj!),
         quantity: h.quantity,
-        forecast: i === skuHistory.length - 1 ? currentStock : null,
+        forecast: null,
         onTheWay: null,
         minAmount: minAmount,
       }));
 
-      // Add a transition point at today if the last history date isn't today
+      // Today's point always uses currentStock from the Products sheet
       const lastDateNorm = new Date(lastDate);
       lastDateNorm.setHours(0, 0, 0, 0);
-      if (lastDateNorm.getTime() !== today.getTime()) {
+      if (lastDateNorm.getTime() === today.getTime()) {
+        // Last history entry is today — override its quantity with Products value
+        chartData[chartData.length - 1].quantity = currentStock;
+        chartData[chartData.length - 1].forecast = currentStock;
+      } else {
+        // Add today as a new point with Products quantity
         chartData.push({
           date: formatDateShort(today),
-          quantity: null,
+          quantity: currentStock,
           forecast: currentStock,
           onTheWay: null,
           minAmount: minAmount,
@@ -320,7 +309,7 @@ function formatDateShort(d: Date): string {
 export function useCriticalDates(items: InventoryOverviewItem[]) {
   const { data: history } = useHistory();
   const { data: orders } = useOrders();
-  const { data: minAmountData } = useMinAmount();
+  const { data: products } = useProducts();
 
   return useMemo(() => {
     const dateMap = new Map<string, Date | null>();
@@ -329,9 +318,9 @@ export function useCriticalDates(items: InventoryOverviewItem[]) {
     const RECEIVED_VALUES = ["כן", "v", "✓", "true", "yes"];
 
     for (const item of items) {
-      const minEntry = minAmountData?.find(m => m.sku.trim() === item.sku.trim());
-      if (!minEntry) { dateMap.set(item.sku, null); continue; }
-      const minAmt = minEntry.minAmount;
+      const product = products?.find(p => p.sku.trim() === item.sku.trim());
+      if (!product || product.minAmount <= 0) { dateMap.set(item.sku, null); continue; }
+      const minAmt = product.minAmount;
 
       // Use min-based rate: minAmount / 180 days (same logic as useProductForecast)
       const forecastSlope = -(minAmt / 180); // units per day, negative = decline
@@ -398,7 +387,7 @@ export function useCriticalDates(items: InventoryOverviewItem[]) {
       if (!found) dateMap.set(item.sku, null);
     }
     return dateMap;
-  }, [items, history, orders, minAmountData]);
+  }, [items, history, orders, products]);
 }
 
 // ── Mutation hooks ──
@@ -406,7 +395,7 @@ export function useCriticalDates(items: InventoryOverviewItem[]) {
 export function useAddProduct() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (data: { name: string; sku: string; barcode: string }) => addProduct(data),
+    mutationFn: (data: { name: string; sku: string; manufacturer?: string }) => addProduct(data),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["products"] });
     },
@@ -416,7 +405,7 @@ export function useAddProduct() {
 export function useAddOrder() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderDate: string; supplierSku: string; dermaSku: string; quantity: string; productName: string; expectedDate: string; container?: string; content?: string; log?: string }) => addOrder(data),
+    mutationFn: (data: { orderDate: string; supplierSku: string; dermaSku: string; quantity: string; productName: string; expectedDate: string; log?: string }) => addOrder(data),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["orders"] });
     },
@@ -492,34 +481,17 @@ export function useOpenOrders() {
 }
 
 export function useLowStockItems() {
-  const { data: inventory, isLoading: invLoading, error: invError } = useInventory();
-  const { data: products, isLoading: prodLoading, error: prodError } = useProducts();
-
-  const isLoading = invLoading || prodLoading;
-  const error = invError || prodError;
+  const { data: products, isLoading, error } = useProducts();
 
   let lowStockItems: LowStockItem[] = [];
 
-  if (inventory && products) {
-    // Take last occurrence of each SKU (most recent quantity)
-    const skuMap = new Map<string, number>();
-    for (const item of inventory) {
-      skuMap.set(item.sku, item.quantity);
-    }
-
-    // Build product name lookup
-    const productMap = new Map<string, string>();
-    for (const product of products) {
-      productMap.set(product.sku, product.name);
-    }
-
-    // Join and filter
-    lowStockItems = Array.from(skuMap.entries())
-      .filter(([, qty]) => qty < 15)
-      .map(([sku, quantity]) => ({
-        productName: productMap.get(sku) ?? sku,
-        sku,
-        quantity,
+  if (products) {
+    lowStockItems = products
+      .filter((p) => p.warehouseQty > 0 && p.warehouseQty < 15)
+      .map((p) => ({
+        productName: p.name,
+        sku: p.sku,
+        quantity: p.warehouseQty,
       }))
       .sort((a, b) => a.quantity - b.quantity);
   }

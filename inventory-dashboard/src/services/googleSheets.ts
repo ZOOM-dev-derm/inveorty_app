@@ -1,12 +1,10 @@
 import Papa from "papaparse";
-import type { InventoryItem, Product, Order, HistoryItem, MinAmountItem } from "@/types";
+import type { Product, Order, HistoryItem } from "@/types";
 
 const SHEET_ID = import.meta.env.VITE_SHEET_ID;
-const INVENTORY_GID = import.meta.env.VITE_INVENTORY_GID;
 const ORDERS_GID = import.meta.env.VITE_ORDERS_GID;
 const PRODUCTS_GID = import.meta.env.VITE_PRODUCTS_GID;
 const HISTORY_GID = import.meta.env.VITE_HISTORY_GID;
-const MIN_AMOUNT_GID = import.meta.env.VITE_MIN_AMOUNT_GID;
 
 function parseDateString(dateStr: string): Date | null {
   // Try DD/MM/YYYY first (Israeli format)
@@ -29,20 +27,12 @@ function parseCsv<T>(url: string): Promise<T[]> {
     Papa.parse<T>(url, {
       download: true,
       header: true,
-      skipEmptyLines: true, // Keep true for other functions
+      skipEmptyLines: true,
       complete: (results) => resolve(results.data),
       error: (error: Error) => reject(error),
     });
   });
 }
-// ...
-// Actually, let's try a safer approach:
-// 1. Fetch with skipEmptyLines: false (so we get ALL rows)
-// 2. But inside fetchOrders, we must be VERY careful with the raw data.
-// 3. And limit the number of rows if it's crazy huge?
-
-// Let's rethink. Use a different robust parsing method.
-// We'll use skipEmptyLines: false but immediately filter and map safely.
 
 function parseCsvWithIndex<T>(url: string): Promise<{ data: T; originalIndex: number }[]> {
   return new Promise((resolve, reject) => {
@@ -62,28 +52,17 @@ function parseCsvWithIndex<T>(url: string): Promise<{ data: T; originalIndex: nu
   });
 }
 
-export async function fetchInventory(): Promise<InventoryItem[]> {
-  const raw = await parseCsv<Record<string, string>>(buildCsvUrl(INVENTORY_GID));
-  return raw
-    .filter((row) => row["מק\"ט דרמלוסופי"]?.trim())
-    .map((row) => ({
-      sku: row["מק\"ט דרמלוסופי"]?.trim() ?? "",
-      quantity: parseInt(row["כמות"] ?? "0", 10) || 0,
-    }));
-}
-
 export async function fetchProducts(): Promise<Product[]> {
   const raw = await parseCsv<Record<string, string>>(buildCsvUrl(PRODUCTS_GID));
   return raw
-    .filter((row) => row["מקט דרמלוסופי"]?.trim())
+    .filter((row) => row["פריט"]?.trim())
     .map((row) => ({
-      name: row["מוצר"]?.trim() ?? "",
-      sku: row["מקט דרמלוסופי"]?.trim() ?? "",
-      barcode: row["ברקוד"]?.trim() ?? "",
-      warehouseQty: parseInt(row["כמות במחסן"] ?? "0", 10) || 0,
-      supplierSku: row["מק\"ט פאר פארם"]?.trim() ?? "",
-      packagingType: row["סוג אריזה"]?.trim() ?? "",
-      content: row["תכולה"]?.trim() ?? "",
+      sku: row["פריט"]?.trim() ?? "",
+      name: row["שם פריט"]?.trim() ?? "",
+      manufacturer: row["ספק"]?.trim() ?? "",
+      minAmount: parseInt((row["מינימום"] ?? "0").replace(/,/g, ""), 10) || 0,
+      fixedAssignment: row["שיוך קבוע"]?.trim() ?? "",
+      warehouseQty: parseInt((row["יתרת מלאי"] ?? "0").replace(/,/g, ""), 10) || 0,
     }));
 }
 
@@ -99,32 +78,10 @@ export async function fetchHistory(): Promise<HistoryItem[]> {
     .filter((item) => item.date && item.sku);
 }
 
-export async function fetchMinAmount(): Promise<MinAmountItem[]> {
-  const raw = await parseCsv<Record<string, string>>(buildCsvUrl(MIN_AMOUNT_GID));
-  const firstRow = raw[0] ?? {};
-  const cols = Object.keys(firstRow);
-  const skuKey = cols.find((k) =>
-    k.includes("דרמלוסופי")
-  ) ?? "מק\"ט דרמלוסופי";
-  const minAmountKey = cols.find((k) => k.includes("מינימום")) ?? "מלאי מינימום";
-  console.debug("[fetchMinAmount] detected columns:", { skuKey, minAmountKey, allColumns: cols });
-  return raw
-    .filter((row) => row[skuKey]?.trim())
-    .map((row) => ({
-      sku: row[skuKey]?.trim() ?? "",
-      minAmount: parseInt((row[minAmountKey] ?? "0").replace(/,/g, ""), 10) || 0,
-    }))
-    .filter((item) => item.minAmount > 0);
-}
-
 export async function fetchOrders(): Promise<Order[]> {
   const rawWithIndex = await parseCsvWithIndex<Record<string, string>>(buildCsvUrl(ORDERS_GID));
 
   if (rawWithIndex.length === 0) return [];
-
-  // Use the first non-empty row to detect columns? 
-  // Attempt to find a row with headers if possible, OR assumes PapaParse header:true worked and first row of file was headers.
-  // rawWithIndex[0].data has keys.
 
   const firstDataRow = rawWithIndex[0]?.data ?? {};
   const cols = Object.keys(firstDataRow);
@@ -192,7 +149,7 @@ async function postToSheet(action: string, data?: Record<string, unknown>): Prom
   return json;
 }
 
-export async function addProduct(data: { name: string; sku: string; barcode: string }) {
+export async function addProduct(data: { name: string; sku: string; manufacturer?: string }) {
   return postToSheet("addProduct", data);
 }
 
@@ -203,8 +160,6 @@ export async function addOrder(data: {
   quantity: string;
   productName: string;
   expectedDate: string;
-  container?: string;
-  content?: string;
   log?: string;
 }) {
   return postToSheet("addOrder", data);

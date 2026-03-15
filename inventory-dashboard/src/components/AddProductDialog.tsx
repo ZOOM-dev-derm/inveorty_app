@@ -16,19 +16,19 @@ export function AddProductDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
-  const [barcode, setBarcode] = useState("");
+  const [manufacturer, setManufacturer] = useState("");
   const mutation = useAddProduct();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !sku.trim()) return;
     mutation.mutate(
-      { name: name.trim(), sku: sku.trim(), barcode: barcode.trim() },
+      { name: name.trim(), sku: sku.trim(), manufacturer: manufacturer.trim() || undefined },
       {
         onSuccess: () => {
           setName("");
           setSku("");
-          setBarcode("");
+          setManufacturer("");
           setOpen(false);
         },
       }
@@ -69,12 +69,12 @@ export function AddProductDialog() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="product-barcode">ברקוד</Label>
+            <Label htmlFor="product-manufacturer">ספק</Label>
             <Input
-              id="product-barcode"
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              placeholder="ברקוד"
+              id="product-manufacturer"
+              value={manufacturer}
+              onChange={(e) => setManufacturer(e.target.value)}
+              placeholder="ספק"
             />
           </div>
           {mutation.isError && (

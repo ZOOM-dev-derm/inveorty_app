@@ -32,7 +32,11 @@
       "Bash(node -e:*)",
       "Bash(git status:*)",
       "Bash(vercel:*)",
-      "Bash(wc -l:*)"
+      "Bash(wc -l:*)",
+      "Bash(git checkout:*)",
+      "Bash(npm run lint:*)",
+      "Bash(start https://inventory-dashboard-tawny.vercel.app)",
+      "Bash(git -C \"C:\\\\Users\\\\lenovo\\\\Desktop\\\\code_projects\\\\claude\" push)"
     ]
   }
 }

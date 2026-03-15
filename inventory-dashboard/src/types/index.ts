@@ -1,16 +1,10 @@
-export interface InventoryItem {
-  sku: string;
-  quantity: number;
-}
-
 export interface Product {
-  name: string;
-  sku: string;
-  barcode: string;
-  warehouseQty: number;  // כמות במחסן
-  supplierSku: string;   // מק"ט פאר-פארם
-  packagingType: string; // סוג אריזה → maps to orders' מיכל
-  content: string;       // תכולה
+  name: string;           // שם פריט
+  sku: string;            // פריט
+  manufacturer: string;   // ספק
+  minAmount: number;      // מינימום
+  fixedAssignment: string; // שיוך קבוע
+  warehouseQty: number;   // יתרת מלאי
 }
 
 export interface Order {
@@ -42,11 +36,6 @@ export interface HistoryItem {
   date: string;
   sku: string;
   quantity: number;
-}
-
-export interface MinAmountItem {
-  sku: string;
-  minAmount: number;
 }
 
 export interface ForecastPoint {

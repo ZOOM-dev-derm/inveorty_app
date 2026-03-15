@@ -61,15 +61,15 @@ function getSheetByGid(ss, gid) {
 }
 
 // GIDs matching the app's env vars
-var PRODUCTS_GID = 1497265723;
+var PRODUCTS_GID = 1500898630;
 var ORDERS_GID = 75015255;
 
 function addProduct(ss, data) {
   var sheet = getSheetByGid(ss, PRODUCTS_GID);
   if (!sheet) return { success: false, error: "Products sheet not found" };
 
-  // Headers: מוצר | מקט דרמלוסופי | ברקוד
-  sheet.appendRow([data.name || "", data.sku || "", data.barcode || ""]);
+  // Headers: פריט | שם פריט | ספק | מינימום | שיוך קבוע | יתרת מלאי
+  sheet.appendRow([data.sku || "", data.name || "", data.manufacturer || "", "", "", ""]);
   return { success: true };
 }
 
@@ -86,8 +86,6 @@ function addOrder(ss, data) {
     "תאריך הזמנה": data.orderDate || "",
     "מק\"ט פאר-פארם": data.supplierSku || "",
     "כמות סה\"כ": data.quantity || "",
-    "מיכל": data.container || "",
-    "תכולה": data.content || "",
     "שם פריט": data.productName || "",
     "קוד דרמה": data.dermaSku || "",
     "תאריך צפי": data.expectedDate || "",
@@ -151,12 +149,12 @@ function syncMissingProducts(ss) {
   if (dermaCol === -1)
     return { success: false, error: "Derma SKU column not found in orders" };
 
-  // Get existing product SKUs
+  // Get existing product SKUs — find by header "פריט"
   var productsData = productsSheet.getDataRange().getValues();
   var productsHeaders = productsData[0];
   var prodSkuCol = -1;
   for (var j = 0; j < productsHeaders.length; j++) {
-    if (productsHeaders[j].toString().indexOf("דרמלוסופי") !== -1) {
+    if (productsHeaders[j].toString().trim() === "פריט") {
       prodSkuCol = j;
       break;
     }
@@ -181,7 +179,8 @@ function syncMissingProducts(ss) {
     var orderName = nameCol !== -1 ? ordersData[m][nameCol].toString().trim() : "";
     if (orderSku && !existingSkus[orderSku] && !seenSkus[orderSku]) {
       seenSkus[orderSku] = true;
-      productsSheet.appendRow([orderName, orderSku, ""]);
+      // New column order: פריט | שם פריט | ספק | מינימום | שיוך קבוע | יתרת מלאי
+      productsSheet.appendRow([orderSku, orderName, "", "", "", ""]);
       added++;
     }
   }
