@@ -30,7 +30,8 @@ function DashboardContent() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("graphs");
   const [pinnedSku, setPinnedSku] = useState<string | null>(null);
-  const [supplierFilter, setSupplierFilter] = useState<string>("");
+  const [supplierFilter, setSupplierFilter] = useState<string>("פאר פארם");
+  const [stockFilter, setStockFilter] = useState<"all" | "belowMin">("belowMin");
   const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
   const supplierDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -115,6 +116,11 @@ function DashboardContent() {
       });
     }
 
+    // Filter by stock level
+    if (stockFilter === "belowMin") {
+      result = result.filter((item) => criticalDates.get(item.sku) != null);
+    }
+
     // Build set of SKUs with open (non-received) orders
     const skusWithOpenOrders = new Set(openOrders?.map((o) => o.dermaSku) ?? []);
 
@@ -140,7 +146,7 @@ function DashboardContent() {
       if (!da && db) return 1;
       return 0;
     });
-  }, [items, search, supplierFilter, criticalDates, products, openOrders, manufacturerByDermaSku]);
+  }, [items, search, supplierFilter, stockFilter, criticalDates, products, openOrders, manufacturerByDermaSku]);
 
 
   const handleRowClick = (sku: string) =>
@@ -205,6 +211,28 @@ function DashboardContent() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Stock filter toggle */}
+              <div className="flex gap-1 p-1 rounded-lg bg-muted/80 shrink-0">
+                <button
+                  onClick={() => setStockFilter("belowMin")}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${stockFilter === "belowMin"
+                    ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+                    }`}
+                >
+                  מתחת למינימום
+                </button>
+                <button
+                  onClick={() => setStockFilter("all")}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${stockFilter === "all"
+                    ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+                    }`}
+                >
+                  כל המוצרים
+                </button>
               </div>
 
               {/* Metrics - Desktop */}
@@ -328,7 +356,7 @@ function DashboardContent() {
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-xs">
                     {filteredItems.length} מוצרים
-                    {(search || supplierFilter) && ` (מסוננים מתוך ${items?.length ?? 0})`}
+                    {(search || supplierFilter || stockFilter === "belowMin") && ` (מסוננים מתוך ${items?.length ?? 0})`}
                   </Badge>
                 </div>
                 <div className="flex flex-col gap-2">
