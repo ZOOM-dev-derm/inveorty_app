@@ -53,27 +53,60 @@ function parseCsvWithIndex<T>(url: string): Promise<{ data: T; originalIndex: nu
 }
 
 export async function fetchProducts(): Promise<Product[]> {
-  const raw = await parseCsv<Record<string, string>>(buildCsvUrl(PRODUCTS_GID));
-  return raw
-    .filter((row) => row["פריט"]?.trim())
+  const url = buildCsvUrl(PRODUCTS_GID);
+  const raw = await parseCsv<Record<string, string>>(url);
+
+  if (raw.length === 0) {
+    console.warn("[fetchProducts] CSV returned 0 rows from:", url);
+    return [];
+  }
+
+  const cols = Object.keys(raw[0]);
+  console.debug("[fetchProducts] columns:", cols);
+
+  // Auto-detect column names (flexible matching like fetchOrders)
+  const skuKey = cols.find(k => k.includes("פריט") && !k.includes("שם")) ?? "פריט";
+  const nameKey = cols.find(k => k.includes("שם") && k.includes("פריט")) ?? "שם פריט";
+  const supplierKey = cols.find(k => k === "ספק") ?? cols.find(k => k.includes("ספק")) ?? "ספק";
+  const minKey = cols.find(k => k.includes("מינימום")) ?? "מינימום";
+  const assignKey = cols.find(k => k.includes("שיוך")) ?? "שיוך קבוע";
+  const qtyKey = cols.find(k => k.includes("יתרת") || (k.includes("מלאי") && !k.includes("מינימום"))) ?? "יתרת מלאי";
+
+  console.debug("[fetchProducts] detected keys:", { skuKey, nameKey, supplierKey, minKey, assignKey, qtyKey });
+
+  const products = raw
+    .filter((row) => row[skuKey]?.trim())
     .map((row) => ({
-      sku: row["פריט"]?.trim() ?? "",
-      name: row["שם פריט"]?.trim() ?? "",
-      manufacturer: row["ספק"]?.trim() ?? "",
-      minAmount: parseInt((row["מינימום"] ?? "0").replace(/,/g, ""), 10) || 0,
-      fixedAssignment: row["שיוך קבוע"]?.trim() ?? "",
-      warehouseQty: parseInt((row["יתרת מלאי"] ?? "0").replace(/,/g, ""), 10) || 0,
+      sku: row[skuKey]?.trim() ?? "",
+      name: row[nameKey]?.trim() ?? "",
+      manufacturer: row[supplierKey]?.trim() ?? "",
+      minAmount: parseInt((row[minKey] ?? "0").replace(/,/g, ""), 10) || 0,
+      fixedAssignment: row[assignKey]?.trim() ?? "",
+      warehouseQty: parseInt((row[qtyKey] ?? "0").replace(/,/g, ""), 10) || 0,
     }));
+
+  console.debug("[fetchProducts]", raw.length, "raw rows →", products.length, "products");
+  return products;
 }
 
 export async function fetchHistory(): Promise<HistoryItem[]> {
   const raw = await parseCsv<Record<string, string>>(buildCsvUrl(HISTORY_GID));
+
+  if (raw.length === 0) return [];
+
+  const cols = Object.keys(raw[0]);
+  console.debug("[fetchHistory] columns:", cols);
+
+  const skuKey = cols.find(k => k.includes("דרמלוסופי")) ?? "מ\"קט דרמלוסופי";
+  const qtyKey = cols.find(k => k.includes("כמות")) ?? "כמות";
+  const dateKey = cols.find(k => k.includes("תאריך")) ?? "תאריך";
+
   return raw
-    .filter((row) => row["מ\"קט דרמלוסופי"]?.trim())
+    .filter((row) => row[skuKey]?.trim())
     .map((row) => ({
-      sku: row["מ\"קט דרמלוסופי"]?.trim() ?? "",
-      quantity: parseInt(row["כמות"] ?? "0", 10) || 0,
-      date: row["תאריך"]?.trim() ?? "",
+      sku: row[skuKey]?.trim() ?? "",
+      quantity: parseInt(row[qtyKey] ?? "0", 10) || 0,
+      date: row[dateKey]?.trim() ?? "",
     }))
     .filter((item) => item.date && item.sku);
 }
