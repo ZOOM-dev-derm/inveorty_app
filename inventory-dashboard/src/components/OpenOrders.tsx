@@ -1,4 +1,4 @@
-import { useOpenOrders, useUpdateOrderStatus, useUpdateOrderComments } from "@/hooks/useSheetData";
+import { useOpenOrders, useProducts, useUpdateOrderStatus, useUpdateOrderComments } from "@/hooks/useSheetData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddOrderDialog } from "./AddOrderDialog";
@@ -81,7 +81,7 @@ function parseCommentLog(raw: string): { date: string; text: string }[] {
   return parsed;
 }
 
-function OrderItem({ order, index, mode, expanded }: { order: Order; index: number; mode: GroupMode; expanded?: boolean }) {
+function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order; index: number; mode: GroupMode; expanded?: boolean; skuNameMap: Map<string, string> }) {
   const statusMutation = useUpdateOrderStatus();
   const commentsMutation = useUpdateOrderComments();
   const { date: expectedDate, estimated } = getExpectedDate(order);
@@ -131,22 +131,15 @@ function OrderItem({ order, index, mode, expanded }: { order: Order; index: numb
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2">
               <span className="text-sm font-medium leading-snug">
-                {mode === "date" ? order.productName : (order.orderDate || "לא ידוע")}
+                {mode === "date" ? (skuNameMap.get(order.dermaSku) || order.productName) : (order.orderDate || "לא ידוע")}
               </span>
               <Badge variant="outline" className="text-xs shrink-0 bg-muted/50">
                 {order.quantity}
               </Badge>
             </div>
-            {(order.dermaSku || order.supplierSku) && (
+            {order.dermaSku && (
               <div className="flex items-center gap-2 mt-0.5">
-                {order.dermaSku && (
-                  <span className="text-sm font-bold">{order.dermaSku}</span>
-                )}
-                {order.supplierSku && (
-                  <span className="text-[11px] text-muted-foreground">
-                    מק&quot;ט פאר פארם: {order.supplierSku}
-                  </span>
-                )}
+                <span className="text-sm font-bold">{order.dermaSku}</span>
               </div>
             )}
             {lastTwoComments.length > 0 && (
@@ -257,7 +250,7 @@ function OrderItem({ order, index, mode, expanded }: { order: Order; index: numb
   );
 }
 
-function OrderGroupCard({ group, mode }: { group: OrderGroup; mode: GroupMode }) {
+function OrderGroupCard({ group, mode, skuNameMap }: { group: OrderGroup; mode: GroupMode; skuNameMap: Map<string, string> }) {
   const Icon = mode === "date" ? Calendar : Package;
   const [expanded, setExpanded] = useState(false);
 
@@ -309,7 +302,7 @@ function OrderGroupCard({ group, mode }: { group: OrderGroup; mode: GroupMode })
       >
         <div className="pt-2 border-t border-border/30">
           {group.orders.map((order, idx) => (
-            <OrderItem key={`${order.supplierSku}-${order.rowIndex}`} order={order} index={idx} mode={mode} expanded={expanded} />
+            <OrderItem key={`${order.dermaSku}-${order.rowIndex}`} order={order} index={idx} mode={mode} expanded={expanded} skuNameMap={skuNameMap} />
           ))}
           <div className={`text-[10px] text-muted-foreground mt-2 transition-opacity duration-500 delay-300 ${expanded ? "opacity-100" : "opacity-0"}`}>
             * תאריך משוער (תאריך הזמנה + 3 חודשים)
@@ -322,7 +315,18 @@ function OrderGroupCard({ group, mode }: { group: OrderGroup; mode: GroupMode })
 
 export function OpenOrders({ search }: { search: string }) {
   const { data: orders, isLoading, error } = useOpenOrders();
+  const { data: products } = useProducts();
   const [groupMode, setGroupMode] = useState<GroupMode>("date");
+
+  const skuNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (products) {
+      for (const p of products) {
+        if (p.sku) map.set(p.sku, p.name);
+      }
+    }
+    return map;
+  }, [products]);
 
   const groups = useMemo<OrderGroup[]>(() => {
     if (!orders) return [];
@@ -331,7 +335,8 @@ export function OpenOrders({ search }: { search: string }) {
     const terms = search.trim().toLowerCase().split(/\s+/);
     const filtered = terms.length > 0
       ? orders.filter((o) => {
-        const searchable = `${o.productName || ""} ${o.orderDate || ""} ${o.dermaSku || ""} ${o.supplierSku || ""}`.toLowerCase();
+        const lookedUpName = skuNameMap.get(o.dermaSku) || "";
+        const searchable = `${lookedUpName} ${o.productName || ""} ${o.orderDate || ""} ${o.dermaSku || ""}`.toLowerCase();
         return terms.every((term) => searchable.includes(term));
       })
       : orders;
@@ -342,7 +347,7 @@ export function OpenOrders({ search }: { search: string }) {
       const key =
         groupMode === "date"
           ? order.orderDate || "לא ידוע"
-          : order.productName || "לא ידוע";
+          : (skuNameMap.get(order.dermaSku) || order.productName || "לא ידוע");
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(order);
     }
@@ -368,7 +373,7 @@ export function OpenOrders({ search }: { search: string }) {
     });
 
     return entries;
-  }, [orders, groupMode, search]);
+  }, [orders, groupMode, search, skuNameMap]);
 
   return (
     <div>
@@ -427,7 +432,7 @@ export function OpenOrders({ search }: { search: string }) {
       {!isLoading && !error && groups.length > 0 && (
         <div className="grid gap-4 grid-cols-1">
           {groups.map((group) => (
-            <OrderGroupCard key={group.label} group={group} mode={groupMode} />
+            <OrderGroupCard key={group.label} group={group} mode={groupMode} skuNameMap={skuNameMap} />
           ))}
         </div>
       )}
