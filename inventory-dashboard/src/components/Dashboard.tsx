@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OpenOrders } from "./OpenOrders";
 
 import { ProductGraph } from "./ProductGraph";
-import { useInventoryOverview, useCriticalDates, useOpenOrders, useProducts } from "@/hooks/useSheetData";
+import { useInventoryOverview, useCriticalDates, useOpenOrders, useProducts, parseDate } from "@/hooks/useSheetData";
 import { useSyncMissingProducts } from "@/hooks/useSheetData";
 import { AddProductDialog } from "./AddProductDialog";
 import { AddOrderDialog } from "./AddOrderDialog";
@@ -31,7 +31,7 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState<Tab>("graphs");
   const [pinnedSku, setPinnedSku] = useState<string | null>(null);
   const [supplierFilter, setSupplierFilter] = useState<string>("");
-  const [stockFilter, setStockFilter] = useState<"all" | "belowMin">("all");
+  const [stockFilter, setStockFilter] = useState<"all" | "belowMin">("belowMin");
   const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
   const supplierDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -66,6 +66,56 @@ function DashboardContent() {
     });
     return [...set].sort((a, b) => a.localeCompare(b, "he"));
   }, [products]);
+
+  // Default supplier filter to first supplier containing "פאר פארם"
+  const [supplierDefaultSet, setSupplierDefaultSet] = useState(false);
+  useEffect(() => {
+    if (!supplierDefaultSet && uniqueSuppliers.length > 0) {
+      const match = uniqueSuppliers.find(s => s.includes("פאר פארם"));
+      if (match) setSupplierFilter(match);
+      setSupplierDefaultSet(true);
+    }
+  }, [uniqueSuppliers, supplierDefaultSet]);
+
+  // Build set of SKUs with open orders
+  const skusWithOpenOrders = useMemo(() => {
+    return new Set(openOrders?.map((o) => o.dermaSku) ?? []);
+  }, [openOrders]);
+
+  // Earliest expected date per SKU from open orders (stores both display string and parsed Date)
+  const earliestExpectedDate = useMemo(() => {
+    const map = new Map<string, { display: string; date: Date }>();
+    if (!openOrders) return map;
+    for (const order of openOrders) {
+      const d = parseDate(order.expectedDate);
+      if (!d) continue;
+      const existing = map.get(order.dermaSku);
+      if (!existing) {
+        map.set(order.dermaSku, { display: order.expectedDate, date: d });
+      } else {
+        if (d < existing.date) {
+          map.set(order.dermaSku, { display: order.expectedDate, date: d });
+        }
+      }
+    }
+    return map;
+  }, [openOrders]);
+
+  // Days remaining per SKU: currentStock / (minAmount / 180)
+  const daysRemaining = useMemo(() => {
+    const map = new Map<string, number | null>();
+    if (!items || !products) return map;
+    for (const item of items) {
+      const product = products.find(p => p.sku.trim() === item.sku.trim());
+      if (!product || product.minAmount <= 0) {
+        map.set(item.sku, null);
+        continue;
+      }
+      const dailyUsage = product.minAmount / 180;
+      map.set(item.sku, Math.round(item.currentStock / dailyUsage));
+    }
+    return map;
+  }, [items, products]);
 
   // Close supplier dropdown on outside click
   useEffect(() => {
@@ -121,32 +171,30 @@ function DashboardContent() {
       result = result.filter((item) => criticalDates.get(item.sku) != null);
     }
 
-    // Build set of SKUs with open (non-received) orders
-    const skusWithOpenOrders = new Set(openOrders?.map((o) => o.dermaSku) ?? []);
-
-    // Sort into 3 tiers:
-    // 1. Has critical date, NO open order (urgent - need to order)
-    // 2. Has critical date, HAS open order (ordered, waiting)
-    // 3. No critical date (everything else)
-    // Within each tier, sort by critical date ascending (soonest first)
+    // Sort by urgency:
+    // Primary: days remaining ascending (lowest first)
+    // Secondary: items WITHOUT open orders before items WITH (same days remaining)
+    // null days remaining go to bottom
     return [...result].sort((a, b) => {
-      const da = criticalDates.get(a.sku);
-      const db = criticalDates.get(b.sku);
+      const daysA = daysRemaining.get(a.sku);
+      const daysB = daysRemaining.get(b.sku);
+
+      // nulls to bottom
+      if (daysA == null && daysB == null) return 0;
+      if (daysA == null) return 1;
+      if (daysB == null) return -1;
+
+      // Primary: days remaining ascending
+      if (daysA !== daysB) return daysA - daysB;
+
+      // Secondary: no order before has order
       const aHasOrder = skusWithOpenOrders.has(a.sku);
       const bHasOrder = skusWithOpenOrders.has(b.sku);
+      if (aHasOrder !== bHasOrder) return aHasOrder ? 1 : -1;
 
-      const tierA = da ? (aHasOrder ? 2 : 1) : 3;
-      const tierB = db ? (bHasOrder ? 2 : 1) : 3;
-
-      if (tierA !== tierB) return tierA - tierB;
-
-      // Within same tier, sort by critical date ascending (nulls last)
-      if (da && db) return da.getTime() - db.getTime();
-      if (da && !db) return -1;
-      if (!da && db) return 1;
       return 0;
     });
-  }, [items, search, supplierFilter, stockFilter, criticalDates, products, openOrders, manufacturerByDermaSku]);
+  }, [items, search, supplierFilter, stockFilter, criticalDates, products, openOrders, manufacturerByDermaSku, daysRemaining, skusWithOpenOrders]);
 
 
   const handleRowClick = (sku: string) =>
@@ -362,20 +410,59 @@ function DashboardContent() {
                 <div className="flex flex-col gap-2">
                   {filteredItems.map((item) => {
                     const open = pinnedSku === item.sku;
+                    const hasOrder = skusWithOpenOrders.has(item.sku);
+                    const expectedInfo = earliestExpectedDate.get(item.sku);
+                    const isOverdue = hasOrder && expectedInfo && expectedInfo.date < new Date();
+                    const days = daysRemaining.get(item.sku);
                     return (
                       <div key={item.sku}>
-                        {/* Collapsed row — always visible */}
+                        {/* Collapsed row — two-line card */}
                         <div
-                          className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border bg-card shadow-sm cursor-pointer transition-colors select-none
+                          className={`px-4 py-3 rounded-xl border bg-card shadow-sm cursor-pointer transition-colors select-none
                             ${open ? "border-primary/30 bg-primary/5 rounded-b-none border-b-0" : "hover:bg-muted/30"}`}
                           onClick={() => handleRowClick(item.sku)}
                         >
-                          <span className="font-semibold text-sm truncate flex-1">{item.productName}</span>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-sm font-bold">{item.sku}</span>
-                            {manufacturerByDermaSku.get(item.sku) && (
-                              <span className="text-xs text-muted-foreground">
-                                ספק: {manufacturerByDermaSku.get(item.sku)}
+                          {/* Top line: product name + SKU */}
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <span className="font-semibold text-sm truncate">{item.productName}</span>
+                            <span className="text-sm font-bold text-muted-foreground shrink-0">{item.sku}</span>
+                          </div>
+                          {/* Bottom line: info chips */}
+                          <div className="flex items-center justify-between gap-2">
+                            {/* Order status chip */}
+                            {hasOrder ? (
+                              isOverdue ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-red-50 text-red-700 border border-red-200/60">
+                                  הזמנה בדרך: באיחור
+                                </span>
+                              ) : expectedInfo ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-green-50 text-green-700 border border-green-200/60">
+                                  הזמנה בדרך: {expectedInfo.display}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-green-50 text-green-700 border border-green-200/60">
+                                  הזמנה בדרך
+                                </span>
+                              )
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-muted/50 text-muted-foreground border border-border/60">
+                                אין הזמנה
+                              </span>
+                            )}
+                            {/* Days remaining chip */}
+                            {days != null ? (
+                              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md border ${
+                                days <= 30
+                                  ? "bg-red-50 text-red-700 border-red-200/60"
+                                  : days <= 60
+                                    ? "bg-amber-50 text-amber-700 border-amber-200/60"
+                                    : "bg-muted/50 text-muted-foreground border-border/60"
+                              }`}>
+                                צפי לסיום סחורה: {days} ימים
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-muted/50 text-muted-foreground border-border/60">
+                                —
                               </span>
                             )}
                           </div>
