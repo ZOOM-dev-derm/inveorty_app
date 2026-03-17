@@ -125,3 +125,34 @@
 .chip-ontheway { background: oklch(0.96 0.03 280); color: oklch(0.48 0.14 280); border-color: oklch(0.88 0.05 280); cursor: pointer; }
 .chip-ontheway:hover { background: oklch(0.93 0.04 280); }
 .chip-alert   { background: oklch(0.96 0.03 25); color: oklch(0.55 0.18 25); border-color: oklch(0.88 0.08 25); }
+
+/* Drawer overlay + panel (RTL — slides from right) */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0);
+  pointer-events: none;
+  transition: background 0.3s ease;
+}
+.drawer-overlay-visible {
+  background: rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+}
+.drawer-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  width: 280px;
+  max-width: 80vw;
+  background: var(--background);
+  border-left: 1px solid var(--border);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.drawer-panel-open {
+  transform: translateX(0);
+}
