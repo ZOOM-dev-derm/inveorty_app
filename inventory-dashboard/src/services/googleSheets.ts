@@ -1,10 +1,11 @@
 import Papa from "papaparse";
-import type { Product, Order, HistoryItem } from "@/types";
+import type { Product, Order, HistoryItem, ConnectedProduct } from "@/types";
 
 const SHEET_ID = import.meta.env.VITE_SHEET_ID;
 const ORDERS_GID = import.meta.env.VITE_ORDERS_GID;
 const PRODUCTS_GID = import.meta.env.VITE_PRODUCTS_GID;
 const HISTORY_GID = import.meta.env.VITE_HISTORY_GID;
+const CONNECTED_PRODUCTS_GID = import.meta.env.VITE_CONNECTED_PRODUCTS_GID;
 
 function parseDateString(dateStr: string): Date | null {
   // Try DD/MM/YYYY first (Israeli format)
@@ -71,8 +72,9 @@ export async function fetchProducts(): Promise<Product[]> {
   const minKey = cols.find(k => k.includes("מינימום")) ?? "מינימום";
   const assignKey = cols.find(k => k.includes("שיוך")) ?? "שיוך קבוע";
   const qtyKey = cols.find(k => k.includes("יתרת") || (k.includes("מלאי") && !k.includes("מינימום"))) ?? "יתרת מלאי";
-
-  console.debug("[fetchProducts] detected keys:", { skuKey, nameKey, supplierKey, minKey, assignKey, qtyKey });
+  const supplierSkuKey = cols.find(k => k.includes("פאר") && k.includes("פארם")) ?? "מק\"ט פאר פארם";
+  const containerKey = cols.find(k => k.includes("מיכל")) ?? "מיכל";
+  console.debug("[fetchProducts] detected keys:", { skuKey, nameKey, supplierKey, minKey, assignKey, qtyKey, supplierSkuKey, containerKey });
 
   const products = raw
     .filter((row) => row[skuKey]?.trim())
@@ -83,6 +85,8 @@ export async function fetchProducts(): Promise<Product[]> {
       minAmount: parseInt((row[minKey] ?? "0").replace(/,/g, ""), 10) || 0,
       fixedAssignment: row[assignKey]?.trim() ?? "",
       warehouseQty: parseInt((row[qtyKey] ?? "0").replace(/,/g, ""), 10) || 0,
+      supplierSku: row[supplierSkuKey]?.trim() ?? "",
+      container: row[containerKey]?.trim() ?? "",
     }));
 
   console.debug("[fetchProducts]", raw.length, "raw rows →", products.length, "products");
@@ -111,6 +115,35 @@ export async function fetchHistory(): Promise<HistoryItem[]> {
     .filter((item) => item.date && item.sku);
 }
 
+export async function fetchConnectedProducts(): Promise<ConnectedProduct[]> {
+  const raw = await parseCsv<Record<string, string>>(buildCsvUrl(CONNECTED_PRODUCTS_GID));
+
+  if (raw.length === 0) return [];
+
+  const cols = Object.keys(raw[0]);
+  console.debug("[fetchConnectedProducts] columns:", cols);
+
+  const groupNumKey = cols.find(k => k.includes("מספר") && k.includes("קבוצה")) ?? "מספר קבוצה";
+  const groupNameKey = cols.find(k => k.includes("שם") && k.includes("קבוצה")) ?? "שם קבוצה";
+  const supplierSkuKey = cols.find(k => k.includes("פאר") && k.includes("פארם")) ?? "פריט פאר פארם";
+  const productNameKey = cols.find(k => k.includes("שם") && k.includes("פריט")) ?? "שם פריט";
+  const labelKey = cols.find(k => k.includes("תווית")) ?? "תווית";
+  const connectedKey = cols.find(k => k.includes("מחוברים")) ?? "מקטים מחוברים";
+  const dermaSkuKey = cols.find(k => k.includes("דרמלוסופי")) ?? 'מק"ט דרמלוסופי';
+
+  return raw
+    .filter(row => row[groupNumKey]?.trim())
+    .map(row => ({
+      groupNumber: row[groupNumKey]?.trim() ?? "",
+      groupName: row[groupNameKey]?.trim() ?? "",
+      supplierSku: row[supplierSkuKey]?.trim() ?? "",
+      productName: row[productNameKey]?.trim() ?? "",
+      label: row[labelKey]?.trim() ?? "",
+      connectedSkus: (row[connectedKey] ?? "").split(",").map(s => s.trim()).filter(Boolean),
+      dermaSku: row[dermaSkuKey]?.trim() ?? "",
+    }));
+}
+
 export async function fetchOrders(): Promise<Order[]> {
   const rawWithIndex = await parseCsvWithIndex<Record<string, string>>(buildCsvUrl(ORDERS_GID));
 
@@ -126,8 +159,10 @@ export async function fetchOrders(): Promise<Order[]> {
   const expectedKey = cols.find((k) => k.includes("צפי")) ?? "תאריך צפי";
   // Prioritize exact match for "לוג" (Log) to avoid matching "קטלוג" (Catalog) or similar
   const logKey = cols.find((k) => k.trim() === "לוג") ?? cols.find((k) => k.includes("לוג")) ?? "לוג";
+  const supplierSkuKey = cols.find((k) => k.includes("פאר") && k.includes("פארם")) ?? cols.find((k) => k.includes("מק") && k.includes("ספק")) ?? "מק\"ט פאר פארם";
+  const containerKey = cols.find((k) => k.includes("מיכל")) ?? "מיכל";
 
-  console.debug("[fetchOrders] detected columns:", { dermaSkuKey, qtyKey, receivedKey, expectedKey, logKey });
+  console.debug("[fetchOrders] detected columns:", { dermaSkuKey, qtyKey, receivedKey, expectedKey, logKey, supplierSkuKey, containerKey });
 
   return rawWithIndex
     .filter((item) => item.data["שם פריט"]?.trim()) // Filter based on content
@@ -147,13 +182,14 @@ export async function fetchOrders(): Promise<Order[]> {
 
       return {
         orderDate: orderDateStr,
-        supplierSku: row["מק\"ט פאר פארם"]?.trim() ?? "",
+        supplierSku: row[supplierSkuKey]?.trim() ?? "",
         dermaSku: row[dermaSkuKey]?.trim() ?? "",
         quantity: (row[qtyKey]?.trim() ?? "").replace(/,/g, ""),
         productName: row["שם פריט"]?.trim() ?? "",
         received: row[receivedKey]?.trim() ?? "",
         expectedDate,
         comments: row[logKey]?.trim() ?? "",
+        container: row[containerKey]?.trim() ?? "",
         rowIndex: item.originalIndex, // Use the captured original index
       };
     });
@@ -194,6 +230,7 @@ export async function addOrder(data: {
   productName: string;
   expectedDate: string;
   log?: string;
+  container?: string;
 }) {
   return postToSheet("addOrder", data);
 }
@@ -208,4 +245,8 @@ export async function updateOrderComments(rowIndex: number, comments: string) {
 
 export async function syncMissingProducts() {
   return postToSheet("syncMissingProducts");
+}
+
+export async function syncSupplierSkus() {
+  return postToSheet("syncSupplierSkus");
 }

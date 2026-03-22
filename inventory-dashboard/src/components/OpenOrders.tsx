@@ -137,11 +137,27 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
                 {order.quantity}
               </Badge>
             </div>
-            {order.dermaSku && (
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-sm font-bold">{order.dermaSku}</span>
-              </div>
-            )}
+            {/* Order details grid */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[11px] text-muted-foreground">
+              {mode === "product" && order.orderDate && (
+                <span><span className="font-medium">תאריך:</span> {order.orderDate}</span>
+              )}
+              {order.dermaSku && (
+                <span><span className="font-medium">מק״ט דרמה:</span> <span className="text-foreground font-bold">{order.dermaSku}</span></span>
+              )}
+              {order.supplierSku && (
+                <span><span className="font-medium">מק״ט פאר פארם:</span> {order.supplierSku}</span>
+              )}
+              {order.container && (
+                <span><span className="font-medium">מיכל:</span> {order.container}</span>
+              )}
+              {expectedDate && (
+                <span>
+                  <span className="font-medium">תאריך צפוי:</span>{" "}
+                  <span className={overdue ? "text-destructive font-medium" : ""}>{formatDate(expectedDate)}{estimated && " *"}</span>
+                </span>
+              )}
+            </div>
             {lastTwoComments.length > 0 && (
               <div className="mt-1 space-y-0.5">
                 {lastTwoComments.map((entry, i) => (
@@ -154,12 +170,6 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {expectedDate && (
-            <span className={`text-xs ${overdue ? "text-destructive font-medium" : "text-muted-foreground"}`}>
-              {formatDate(expectedDate)}
-              {estimated && " *"}
-            </span>
-          )}
           {overdue && (
             <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
               באיחור
@@ -273,9 +283,21 @@ function OrderGroupCard({ group, mode, skuNameMap }: { group: OrderGroup; mode: 
           </div>
           <div>
             <div className="font-bold text-base">{group.label}</div>
-            <div className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+            <div className="text-xs text-muted-foreground font-medium flex items-center gap-1 flex-wrap">
               <Package className="h-3 w-3" />
               {group.orders.length} פריטים
+              {mode === "product" && group.orders[0]?.dermaSku && (
+                <>
+                  <span className="mx-0.5">·</span>
+                  <span>{group.orders[0].dermaSku}</span>
+                </>
+              )}
+              {mode === "product" && group.orders[0]?.supplierSku && (
+                <>
+                  <span className="mx-0.5">·</span>
+                  <span>{group.orders[0].supplierSku}</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -298,7 +320,7 @@ function OrderGroupCard({ group, mode, skuNameMap }: { group: OrderGroup; mode: 
       {/* Expandable order details */}
       <div
         className="mt-3 overflow-hidden transition-all duration-300"
-        style={{ maxHeight: expanded ? `${group.orders.length * 120 + 80}px` : "0px" }}
+        style={{ maxHeight: expanded ? `${group.orders.length * 160 + 80}px` : "0px" }}
       >
         <div className="pt-2 border-t border-border/30">
           {group.orders.map((order, idx) => (
@@ -327,6 +349,7 @@ export function OpenOrders({ search }: { search: string }) {
     }
     return map;
   }, [products]);
+
 
   const groups = useMemo<OrderGroup[]>(() => {
     if (!orders) return [];

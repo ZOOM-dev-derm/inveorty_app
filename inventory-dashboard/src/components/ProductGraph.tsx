@@ -22,9 +22,11 @@ interface ProductGraphProps {
   currentStock: number;
   onTheWay: number;
   onOrdersClick?: (productName: string) => void;
+  supplierSku?: string;
+  linkedProducts?: { name: string; sku: string }[];
 }
 
-export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrdersClick }: ProductGraphProps) {
+export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrdersClick, supplierSku, linkedProducts }: ProductGraphProps) {
   const { chartData, declineRate, minAmount, realRate, minRate, isLoading, error } = useProductForecast(sku, currentStock);
 
   const [zoomRange, setZoomRange] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
@@ -294,10 +296,19 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
           </div>
         </div>
 
-        {/* SKU */}
-        <div className="text-[10px] md:text-xs text-muted-foreground font-medium">
-          מק״ט: {sku}
+        {/* SKU + Supplier SKU */}
+        <div className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-3 flex-wrap">
+          <span>מק״ט: {sku}</span>
+          {supplierSku && <span>מק״ט פאר פארם: <span className="font-bold">{supplierSku}</span></span>}
         </div>
+
+        {/* Linked products */}
+        {linkedProducts && linkedProducts.length > 0 && (
+          <div className="text-[10px] md:text-xs text-indigo-600 font-medium flex items-center gap-1.5">
+            <span>פריטים מקושרים:</span>
+            <span>{linkedProducts.map(l => l.name).join(", ")}</span>
+          </div>
+        )}
 
         {/* Status Chips Row */}
         <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">

@@ -5,6 +5,18 @@ export interface Product {
   minAmount: number;      // מינימום
   fixedAssignment: string; // שיוך קבוע
   warehouseQty: number;   // יתרת מלאי
+  supplierSku: string;    // מק"ט פאר פארם
+  container: string;      // מיכל
+}
+
+export interface ConnectedProduct {
+  groupNumber: string;    // מספר קבוצה
+  groupName: string;      // שם קבוצה
+  supplierSku: string;    // פריט פאר פארם
+  productName: string;    // שם פריט
+  label: string;          // תווית
+  connectedSkus: string[]; // מקטים מחוברים
+  dermaSku: string;       // מק"ט דרמלוסופי
 }
 
 export interface Order {
@@ -16,6 +28,7 @@ export interface Order {
   received: string;
   expectedDate: string;
   comments: string;
+  container: string;       // מיכל
   rowIndex: number;        // 1-based row in the sheet (for updates)
 }
 

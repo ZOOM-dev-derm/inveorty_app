@@ -83,6 +83,32 @@ All defined in `inventory-dashboard/.env`:
 - Optimistic updates on order status toggles and comment edits (with rollback on error)
 - Hebrew column names in CSV are mapped to English TypeScript interfaces in the service layer
 
+## Apps Script Deployment (clasp)
+
+Clasp is configured in `apps-script/.clasp.json`. To push code changes to Google Apps Script and deploy:
+
+```bash
+cd apps-script
+clasp login        # if auth expired (invalid_grant error)
+clasp push         # uploads Code.js to Google Apps Script
+clasp deploy -i "DEPLOYMENT_ID" -d "description"  # updates existing deployment
+```
+
+The active deployment ID is `AKfycbw_LLMdiPOg1IqbMzT6tIABAxFBOmPOGXfbEwld6MKIqmuU6drQ-d8ZgrTNlrdrCTo`. Use `clasp deployments` to list all.
+
+### Writing data to Google Sheets
+
+To POST data to the Apps Script endpoint (e.g. bulk updates), use Node's built-in `fetch` — **not curl**. Google Apps Script redirects POST requests, and curl loses the `Content-Length` header on redirect (411 error). Node `fetch` with `redirect: 'follow'` handles this correctly:
+
+```js
+fetch(APPS_SCRIPT_URL, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(payload),
+  redirect: 'follow'
+}).then(r => r.text()).then(console.log);
+```
+
 ## Deployment
 
 - Hosted on **Vercel**

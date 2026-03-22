@@ -8,7 +8,7 @@ import { SearchInput } from "@/components/layout/SearchInput";
 import { SummaryCard } from "@/components/layout/SummaryCard";
 import { SupplierDropdown } from "@/components/SupplierDropdown";
 import { ProductGraph } from "@/components/ProductGraph";
-import { useInventoryOverview, useCriticalDates, useOpenOrders, useProducts, parseDate } from "@/hooks/useSheetData";
+import { useInventoryOverview, useCriticalDates, useOpenOrders, useProducts, useLinkedProducts, parseDate } from "@/hooks/useSheetData";
 
 export function ProductsPage() {
   const navigate = useNavigate();
@@ -21,6 +21,7 @@ export function ProductsPage() {
   const criticalDates = useCriticalDates(items ?? []);
   const { data: openOrders } = useOpenOrders();
   const { data: products } = useProducts();
+  const { supplierSkuMap, linkedProductsMap } = useLinkedProducts();
 
   const handleNavigateToOrders = useCallback((productName: string) => {
     navigate(`/orders?search=${encodeURIComponent(productName)}`);
@@ -244,6 +245,9 @@ export function ProductsPage() {
             const expectedInfo = earliestExpectedDate.get(item.sku);
             const isOverdue = hasOrder && expectedInfo && expectedInfo.date < new Date();
             const days = daysRemaining.get(item.sku);
+            const product = products?.find(p => p.sku === item.sku);
+            const peerFarmSku = product?.supplierSku || supplierSkuMap.get(item.sku);
+            const linked = linkedProductsMap.get(item.sku);
             return (
               <div key={item.sku}>
                 {/* Collapsed row */}
@@ -254,7 +258,10 @@ export function ProductsPage() {
                 >
                   <div className="flex items-center justify-between gap-3 mb-2">
                     <span className="font-semibold text-sm truncate">{item.productName}</span>
-                    <span className="text-sm font-bold text-muted-foreground shrink-0">{item.sku}</span>
+                    <span className="text-sm font-bold text-muted-foreground shrink-0">
+                      {item.sku}
+                      {peerFarmSku && <span className="text-muted-foreground font-normal"> ({peerFarmSku})</span>}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     {hasOrder ? (
@@ -303,6 +310,8 @@ export function ProductsPage() {
                       currentStock={item.currentStock}
                       onTheWay={item.onTheWay}
                       onOrdersClick={handleNavigateToOrders}
+                      supplierSku={peerFarmSku}
+                      linkedProducts={linked}
                     />
                   </div>
                 )}

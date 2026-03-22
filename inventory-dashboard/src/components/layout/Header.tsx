@@ -4,7 +4,7 @@ import { RefreshCw, Menu, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddProductDialog } from "@/components/AddProductDialog";
 import { AddOrderDialog } from "@/components/AddOrderDialog";
-import { useSyncMissingProducts } from "@/hooks/useSheetData";
+import { useSyncMissingProducts, useSyncSupplierSkus } from "@/hooks/useSheetData";
 import { SideNav } from "./SideNav";
 import logoSrc from "@/assets/logo.png";
 
@@ -13,6 +13,7 @@ export function Header() {
   const [refreshing, setRefreshing] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const syncMutation = useSyncMissingProducts();
+  const syncSkusMutation = useSyncSupplierSkus();
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -47,12 +48,12 @@ export function Header() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => syncMutation.mutate()}
-              disabled={syncMutation.isPending}
-              title="סנכרן מוצרים"
+              onClick={() => { syncMutation.mutate(); syncSkusMutation.mutate(); }}
+              disabled={syncMutation.isPending || syncSkusMutation.isPending}
+              title="סנכרן מוצרים + מק״טי פאר פארם"
               className="h-8 w-8 hidden sm:inline-flex"
             >
-              {syncMutation.isPending ? (
+              {(syncMutation.isPending || syncSkusMutation.isPending) ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4" />

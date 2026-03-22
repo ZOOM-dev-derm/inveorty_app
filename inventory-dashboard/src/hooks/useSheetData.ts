@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { fetchProducts, fetchOrders, fetchHistory, addProduct, addOrder, updateOrderStatus, updateOrderComments, syncMissingProducts } from "@/services/googleSheets";
-import type { Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint } from "@/types";
+import { fetchProducts, fetchOrders, fetchHistory, fetchConnectedProducts, addProduct, addOrder, updateOrderStatus, updateOrderComments, syncMissingProducts, syncSupplierSkus } from "@/services/googleSheets";
+import type { Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint, ConnectedProduct } from "@/types";
 
 const FIVE_MINUTES = 5 * 60 * 1000;
 const TEN_MINUTES = 10 * 60 * 1000;
@@ -27,6 +27,14 @@ export function useHistory() {
     queryKey: ["history"],
     queryFn: fetchHistory,
     refetchInterval: FIVE_MINUTES,
+  });
+}
+
+export function useConnectedProducts() {
+  return useQuery<ConnectedProduct[]>({
+    queryKey: ["connectedProducts"],
+    queryFn: fetchConnectedProducts,
+    refetchInterval: TEN_MINUTES,
   });
 }
 
@@ -405,7 +413,7 @@ export function useAddProduct() {
 export function useAddOrder() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderDate: string; supplierSku: string; dermaSku: string; quantity: string; productName: string; expectedDate: string; log?: string }) => addOrder(data),
+    mutationFn: (data: { orderDate: string; supplierSku: string; dermaSku: string; quantity: string; productName: string; expectedDate: string; log?: string; container?: string }) => addOrder(data),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["orders"] });
     },
@@ -467,6 +475,88 @@ export function useSyncMissingProducts() {
       client.invalidateQueries({ queryKey: ["products"] });
     },
   });
+}
+
+export function useSyncSupplierSkus() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => syncSupplierSkus(),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export interface LinkedProduct {
+  name: string;
+  sku: string;
+  supplierSku: string;
+  warehouseQty: number;
+  minAmount: number;
+}
+
+/**
+ * Maps dermaSku → supplierSku from connected products sheet,
+ * and builds linkedProductsMap from recipe groups (connected products sheet).
+ */
+export function useLinkedProducts() {
+  const { data: connectedProducts } = useConnectedProducts();
+  const { data: products } = useProducts();
+
+  return useMemo(() => {
+    // dermaSku → supplierSku from connected products sheet
+    const supplierSkuMap = new Map<string, string>();
+    // dermaSku → group number
+    const skuToGroup = new Map<string, string>();
+    // group number → ConnectedProduct[]
+    const groupMembers = new Map<string, ConnectedProduct[]>();
+
+    if (connectedProducts) {
+      for (const cp of connectedProducts) {
+        const dsku = cp.dermaSku?.trim();
+        if (dsku) {
+          if (cp.supplierSku) supplierSkuMap.set(dsku, cp.supplierSku);
+          if (cp.groupNumber) {
+            skuToGroup.set(dsku, cp.groupNumber);
+            const members = groupMembers.get(cp.groupNumber) ?? [];
+            members.push(cp);
+            groupMembers.set(cp.groupNumber, members);
+          }
+        }
+      }
+    }
+
+    // Build product lookup for warehouseQty / minAmount
+    const productMap = new Map<string, Product>();
+    if (products) {
+      for (const p of products) {
+        productMap.set(p.sku.trim(), p);
+      }
+    }
+
+    // dermaSku → LinkedProduct[] (other products in same recipe group)
+    const linkedProductsMap = new Map<string, LinkedProduct[]>();
+    for (const [dsku, groupNum] of skuToGroup) {
+      const members = groupMembers.get(groupNum) ?? [];
+      if (members.length <= 1) continue;
+      const linked: LinkedProduct[] = [];
+      for (const member of members) {
+        const memberSku = member.dermaSku?.trim();
+        if (!memberSku || memberSku === dsku) continue;
+        const prod = productMap.get(memberSku);
+        linked.push({
+          name: prod?.name ?? member.productName ?? memberSku,
+          sku: memberSku,
+          supplierSku: member.supplierSku ?? "",
+          warehouseQty: prod?.warehouseQty ?? 0,
+          minAmount: prod?.minAmount ?? 0,
+        });
+      }
+      if (linked.length > 0) linkedProductsMap.set(dsku, linked);
+    }
+
+    return { supplierSkuMap, linkedProductsMap };
+  }, [connectedProducts, products]);
 }
 
 export function useOpenOrders() {
