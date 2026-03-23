@@ -346,6 +346,33 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       };
     });
 
+    // Helper: build linked children for a given SKU
+    const buildLinkedChildren = (parentSku: string, allExcluded: Set<string>): ReviewItem[] => {
+      const parentLinked = linkedProductsMap.get(parentSku);
+      if (!parentLinked || parentLinked.length === 0) return [];
+      return parentLinked
+        .filter((l) => !allExcluded.has(l.sku))
+        .map((l) => {
+          const prevOrd = prevOrderMap.get(l.sku.trim());
+          const prod = productLookup.get(l.sku.trim());
+          return {
+            name: l.name,
+            sku: l.sku,
+            supplierSku: l.supplierSku || supplierSkuMap.get(l.sku) || "",
+            warehouseQty: l.warehouseQty,
+            minAmount: l.minAmount,
+            quantity: String(l.minAmount || ""),
+            checked: false,
+            isOriginal: false,
+            parentSku,
+            container: prod?.container || "",
+            distributionNotes: prevOrd?.distributionNotes || "",
+            formula: prevOrd?.formula || "",
+            content: prevOrd?.content || "",
+          };
+        });
+    };
+
     // Low-stock suggestions (exclude original and linked SKUs)
     const excludeSkus = new Set([currentSku, ...linkedItems.map((l) => l.sku)]);
     const suggestionItems: ReviewItem[] = lowStockSuggestions
@@ -370,7 +397,27 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         };
       });
 
-    setReviewItems([originalItem, ...linkedItems, ...suggestionItems]);
+    // Build full list with pre-computed linked children for each item
+    const allSkus = new Set([currentSku, ...linkedItems.map((l) => l.sku), ...suggestionItems.map((s) => s.sku)]);
+    const allItems: ReviewItem[] = [originalItem];
+
+    // Add linked items + their linked children
+    for (const li of linkedItems) {
+      allItems.push(li);
+      const children = buildLinkedChildren(li.sku, allSkus);
+      for (const c of children) { allSkus.add(c.sku); }
+      allItems.push(...children);
+    }
+
+    // Add suggestion items + their linked children
+    for (const si of suggestionItems) {
+      allItems.push(si);
+      const children = buildLinkedChildren(si.sku, allSkus);
+      for (const c of children) { allSkus.add(c.sku); }
+      allItems.push(...children);
+    }
+
+    setReviewItems(allItems);
     setDialogPhase("review");
   };
 
@@ -468,48 +515,11 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
 
   const selectedMinAmount = selectedProduct ? minAmountMap.get(selectedProduct.sku.trim()) : undefined;
 
-  // Handle checking/unchecking a suggestion — adds/removes linked products
-  const handleSuggestionCheck = (idx: number, checked: boolean) => {
-    setReviewItems((prev) => {
-      const item = prev[idx];
-      let updated = prev.map((r, i) => i === idx ? { ...r, checked } : r);
-
-      if (checked && !item.isOriginal) {
-        // Add linked products if they exist
-        const linked = linkedProductsMap.get(item.sku.trim());
-        if (linked && linked.length > 0) {
-          const existingSkus = new Set(updated.map((r) => r.sku));
-          const newLinked: ReviewItem[] = linked
-            .filter((l) => !existingSkus.has(l.sku))
-            .map((l) => {
-              const prevOrd = prevOrderMap.get(l.sku.trim());
-              const prod = products?.find((p) => p.sku.trim() === l.sku.trim());
-              return {
-                name: l.name,
-                sku: l.sku,
-                supplierSku: l.supplierSku || supplierSkuMap.get(l.sku) || "",
-                warehouseQty: l.warehouseQty,
-                minAmount: l.minAmount,
-                quantity: String(l.minAmount || ""),
-                checked: false,
-                isOriginal: false,
-                parentSku: item.sku,
-                container: prod?.container || "",
-                distributionNotes: prevOrd?.distributionNotes || "",
-                formula: prevOrd?.formula || "",
-                content: prevOrd?.content || "",
-              };
-            });
-          if (newLinked.length > 0) {
-            updated = [...updated.slice(0, idx + 1), ...newLinked, ...updated.slice(idx + 1)];
-          }
-        }
-      } else if (!checked && !item.isOriginal) {
-        // Remove linked sub-items of this parent
-        updated = updated.filter((r) => r.parentSku !== item.sku);
-      }
-      return updated;
-    });
+  // Just toggle checked state — linked children are pre-computed and shown/hidden via rendering
+  const handleItemCheck = (idx: number, checked: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((r, i) => i === idx ? { ...r, checked } : r)
+    );
   };
 
   const checkedCount = reviewItems.filter((item) => item.checked).length;
@@ -732,6 +742,12 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                   if (showSeparator) shownSeparator = true;
                   const isLinkedChild = !!item.parentSku;
 
+                  // Hide linked children when parent is unchecked
+                  if (isLinkedChild) {
+                    const parent = reviewItems.find((r) => r.sku === item.parentSku);
+                    if (parent && !parent.checked) return null;
+                  }
+
                   return (
                     <div key={item.sku}>
                       {showSeparator && (
@@ -750,15 +766,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                           type="checkbox"
                           checked={item.checked}
                           disabled={item.isOriginal}
-                          onChange={(e) => {
-                            if (!item.isOriginal && !item.parentSku) {
-                              handleSuggestionCheck(idx, e.target.checked);
-                            } else {
-                              setReviewItems((prev) =>
-                                prev.map((r, i) => i === idx ? { ...r, checked: e.target.checked } : r)
-                              );
-                            }
-                          }}
+                          onChange={(e) => handleItemCheck(idx, e.target.checked)}
                           className="h-4 w-4 rounded border-gray-300 accent-primary shrink-0"
                         />
                         <div className="flex-1 min-w-0">
