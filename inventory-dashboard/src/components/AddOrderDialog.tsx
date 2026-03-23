@@ -468,6 +468,50 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
 
   const selectedMinAmount = selectedProduct ? minAmountMap.get(selectedProduct.sku.trim()) : undefined;
 
+  // Handle checking/unchecking a suggestion — adds/removes linked products
+  const handleSuggestionCheck = (idx: number, checked: boolean) => {
+    setReviewItems((prev) => {
+      const item = prev[idx];
+      let updated = prev.map((r, i) => i === idx ? { ...r, checked } : r);
+
+      if (checked && item.isSuggestion) {
+        // Add linked products if they exist
+        const linked = linkedProductsMap.get(item.sku.trim());
+        if (linked && linked.length > 0) {
+          const existingSkus = new Set(updated.map((r) => r.sku));
+          const newLinked: ReviewItem[] = linked
+            .filter((l) => !existingSkus.has(l.sku))
+            .map((l) => {
+              const prevOrd = prevOrderMap.get(l.sku.trim());
+              const prod = products?.find((p) => p.sku.trim() === l.sku.trim());
+              return {
+                name: l.name,
+                sku: l.sku,
+                supplierSku: l.supplierSku || supplierSkuMap.get(l.sku) || "",
+                warehouseQty: l.warehouseQty,
+                minAmount: l.minAmount,
+                quantity: String(l.minAmount || ""),
+                checked: false,
+                isOriginal: false,
+                parentSku: item.sku,
+                container: prod?.container || "",
+                distributionNotes: prevOrd?.distributionNotes || "",
+                formula: prevOrd?.formula || "",
+                content: prevOrd?.content || "",
+              };
+            });
+          if (newLinked.length > 0) {
+            updated = [...updated.slice(0, idx + 1), ...newLinked, ...updated.slice(idx + 1)];
+          }
+        }
+      } else if (!checked && item.isSuggestion) {
+        // Remove linked sub-items of this parent
+        updated = updated.filter((r) => r.parentSku !== item.sku);
+      }
+      return updated;
+    });
+  };
+
   const checkedCount = reviewItems.filter((item) => item.checked).length;
   const allResolved = submissionStatuses.length > 0 && submissionStatuses.every((s) => s.status === "success" || s.status === "error");
 
@@ -683,48 +727,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
             <div className="space-y-2">
               {(() => {
                 let shownSeparator = false;
-
-                const handleSuggestionCheck = (idx: number, checked: boolean) => {
-                  setReviewItems((prev) => {
-                    const item = prev[idx];
-                    let updated = prev.map((r, i) => i === idx ? { ...r, checked } : r);
-
-                    if (checked && item.isSuggestion) {
-                      // Add linked products if they exist
-                      const linked = linkedProductsMap.get(item.sku.trim());
-                      if (linked && linked.length > 0) {
-                        const existingSkus = new Set(updated.map((r) => r.sku));
-                        const linkedItems: ReviewItem[] = linked
-                          .filter((l) => !existingSkus.has(l.sku))
-                          .map((l) => {
-                            const prev2 = prevOrderMap.get(l.sku.trim());
-                            return {
-                              name: l.name,
-                              sku: l.sku,
-                              supplierSku: l.supplierSku || supplierSkuMap.get(l.sku) || "",
-                              warehouseQty: l.warehouseQty,
-                              minAmount: l.minAmount,
-                              quantity: String(l.minAmount || ""),
-                              checked: false,
-                              isOriginal: false,
-                              parentSku: item.sku,
-                              container: products?.find((p) => p.sku.trim() === l.sku.trim())?.container || "",
-                              distributionNotes: prev2?.distributionNotes || "",
-                              formula: prev2?.formula || "",
-                              content: prev2?.content || "",
-                            };
-                          });
-                        // Insert linked items right after the parent
-                        updated = [...updated.slice(0, idx + 1), ...linkedItems, ...updated.slice(idx + 1)];
-                      }
-                    } else if (!checked && item.isSuggestion) {
-                      // Remove linked sub-items of this parent
-                      updated = updated.filter((r) => r.parentSku !== item.sku);
-                    }
-                    return updated;
-                  });
-                };
-
                 return reviewItems.map((item, idx) => {
                   const showSeparator = item.isSuggestion && !item.parentSku && !shownSeparator;
                   if (showSeparator) shownSeparator = true;
