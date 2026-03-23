@@ -51,6 +51,7 @@ interface ReviewItem {
   packagingLabels?: string;
   formula?: string;
   content?: string;
+  parentSku?: string; // linked sub-item of a suggestion
 }
 
 interface SubmissionStatus {
@@ -682,9 +683,52 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
             <div className="space-y-2">
               {(() => {
                 let shownSeparator = false;
+
+                const handleSuggestionCheck = (idx: number, checked: boolean) => {
+                  setReviewItems((prev) => {
+                    const item = prev[idx];
+                    let updated = prev.map((r, i) => i === idx ? { ...r, checked } : r);
+
+                    if (checked && item.isSuggestion) {
+                      // Add linked products if they exist
+                      const linked = linkedProductsMap.get(item.sku.trim());
+                      if (linked && linked.length > 0) {
+                        const existingSkus = new Set(updated.map((r) => r.sku));
+                        const linkedItems: ReviewItem[] = linked
+                          .filter((l) => !existingSkus.has(l.sku))
+                          .map((l) => {
+                            const prev2 = prevOrderMap.get(l.sku.trim());
+                            return {
+                              name: l.name,
+                              sku: l.sku,
+                              supplierSku: l.supplierSku || supplierSkuMap.get(l.sku) || "",
+                              warehouseQty: l.warehouseQty,
+                              minAmount: l.minAmount,
+                              quantity: String(l.minAmount || ""),
+                              checked: false,
+                              isOriginal: false,
+                              parentSku: item.sku,
+                              container: products?.find((p) => p.sku.trim() === l.sku.trim())?.container || "",
+                              distributionNotes: prev2?.distributionNotes || "",
+                              formula: prev2?.formula || "",
+                              content: prev2?.content || "",
+                            };
+                          });
+                        // Insert linked items right after the parent
+                        updated = [...updated.slice(0, idx + 1), ...linkedItems, ...updated.slice(idx + 1)];
+                      }
+                    } else if (!checked && item.isSuggestion) {
+                      // Remove linked sub-items of this parent
+                      updated = updated.filter((r) => r.parentSku !== item.sku);
+                    }
+                    return updated;
+                  });
+                };
+
                 return reviewItems.map((item, idx) => {
-                  const showSeparator = item.isSuggestion && !shownSeparator;
+                  const showSeparator = item.isSuggestion && !item.parentSku && !shownSeparator;
                   if (showSeparator) shownSeparator = true;
+                  const isLinkedChild = !!item.parentSku;
 
                   return (
                     <div key={item.sku}>
@@ -698,16 +742,20 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                       <div
                         className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-opacity ${
                           item.checked ? "bg-background" : "opacity-50 bg-muted/30"
-                        } ${item.isOriginal ? "border-primary/30" : ""} ${item.isSuggestion && !item.checked ? "border-amber-200" : ""}`}
+                        } ${item.isOriginal ? "border-primary/30" : ""} ${item.isSuggestion && !item.checked ? "border-amber-200" : ""} ${isLinkedChild ? "mr-6 border-dashed" : ""}`}
                       >
                         <input
                           type="checkbox"
                           checked={item.checked}
                           disabled={item.isOriginal}
                           onChange={(e) => {
-                            setReviewItems((prev) =>
-                              prev.map((r, i) => i === idx ? { ...r, checked: e.target.checked } : r)
-                            );
+                            if (item.isSuggestion && !item.parentSku) {
+                              handleSuggestionCheck(idx, e.target.checked);
+                            } else {
+                              setReviewItems((prev) =>
+                                prev.map((r, i) => i === idx ? { ...r, checked: e.target.checked } : r)
+                              );
+                            }
                           }}
                           className="h-4 w-4 rounded border-gray-300 accent-primary shrink-0"
                         />
@@ -716,6 +764,9 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                             <span className="text-sm font-medium truncate">{item.name}</span>
                             {item.isOriginal && (
                               <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">מקורי</span>
+                            )}
+                            {isLinkedChild && (
+                              <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded shrink-0">מקושר</span>
                             )}
                           </div>
                           <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5">
@@ -736,6 +787,44 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                           className="w-20 h-8 text-sm text-center shrink-0"
                         />
                       </div>
+                      {/* Expanded details when suggestion is checked */}
+                      {item.isSuggestion && item.checked && !isLinkedChild && (
+                        <div className="mt-1 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-2 space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-muted-foreground">מק״ט ספק</label>
+                              <Input
+                                value={item.supplierSku}
+                                onChange={(e) => {
+                                  setReviewItems((prev) =>
+                                    prev.map((r, i) => i === idx ? { ...r, supplierSku: e.target.value } : r)
+                                  );
+                                }}
+                                className="h-7 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground">חלוקה+הערות</label>
+                              <Input
+                                value={item.distributionNotes || ""}
+                                onChange={(e) => {
+                                  setReviewItems((prev) =>
+                                    prev.map((r, i) => i === idx ? { ...r, distributionNotes: e.target.value } : r)
+                                  );
+                                }}
+                                className="h-7 text-xs"
+                              />
+                            </div>
+                          </div>
+                          {(item.container || item.content || item.formula) && (
+                            <div className="text-[10px] text-muted-foreground flex items-center gap-3 flex-wrap">
+                              {item.container && <span>מיכל: {item.container}</span>}
+                              {item.content && <span>תכולה: {item.content}</span>}
+                              {item.formula && <span>פורמולה: {item.formula}</span>}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 });
