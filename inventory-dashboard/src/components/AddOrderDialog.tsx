@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useAddOrder, useProducts, useLinkedProducts } from "@/hooks/useSheetData";
+import { useAddOrder, useProducts, useLinkedProducts, useOpenOrders } from "@/hooks/useSheetData";
 import { useQueryClient } from "@tanstack/react-query";
-import { addOrder } from "@/services/googleSheets";
+import { addOrder, sendDailyOrderEmail } from "@/services/googleSheets";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Loader2, X, Package, Check, AlertCircle } from "lucide-react";
+import { Plus, Loader2, X, Package, Check, AlertCircle, Mail } from "lucide-react";
 
 function todayFormatted(): string {
   const d = new Date();
@@ -45,6 +45,8 @@ interface ReviewItem {
   quantity: string;
   checked: boolean;
   isOriginal: boolean;
+  isSuggestion?: boolean;
+  container?: string;
 }
 
 interface SubmissionStatus {
@@ -80,12 +82,14 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
   const { data: products } = useProducts();
   const mutation = useAddOrder();
   const { linkedProductsMap, supplierSkuMap } = useLinkedProducts();
+  const { data: openOrders } = useOpenOrders();
   const queryClient = useQueryClient();
 
   // Three-phase dialog state
   const [dialogPhase, setDialogPhase] = useState<"form" | "review" | "submitting">("form");
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [submissionStatuses, setSubmissionStatuses] = useState<SubmissionStatus[]>([]);
+  const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   // Build min amount lookup from products
   const minAmountMap = useMemo(() => {
@@ -99,6 +103,29 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     }
     return map;
   }, [products]);
+
+  // Build set of SKUs that already have open orders
+  const openOrderSkus = useMemo(() => {
+    const set = new Set<string>();
+    if (openOrders) {
+      for (const o of openOrders) {
+        if (o.dermaSku) set.add(o.dermaSku.trim());
+      }
+    }
+    return set;
+  }, [openOrders]);
+
+  // Low-stock Peer Pharm products without open orders (for suggestions)
+  const lowStockSuggestions = useMemo(() => {
+    if (!products) return [];
+    return products.filter((p) => {
+      if (p.manufacturer !== "פאר פארם") return false;
+      if (p.minAmount <= 0) return false;
+      if (p.warehouseQty > p.minAmount * 1.1) return false;
+      if (openOrderSkus.has(p.sku.trim())) return false;
+      return true;
+    });
+  }, [products, openOrderSkus]);
 
   // Filter products by search query
   const filteredProducts = useMemo(() => {
@@ -210,6 +237,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setDialogPhase("form");
     setReviewItems([]);
     setSubmissionStatuses([]);
+    setEmailStatus("idle");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -219,53 +247,57 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     const currentSku = dermaSku.trim();
     const linked = linkedProductsMap.get(currentSku);
 
-    if (!linked || linked.length === 0) {
-      // No connected products → submit immediately
-      mutation.mutate(
-        {
-          orderDate: orderDate.trim(),
-          supplierSku: supplierSku.trim(),
-          dermaSku: currentSku,
-          quantity: quantity.trim(),
-          productName: productName.trim(),
-          expectedDate: expectedDate.trim(),
-          log: log.trim() || undefined,
-          container: selectedProduct?.container || undefined,
-        },
-        {
-          onSuccess: () => {
-            resetFields();
-            setOpen(false);
-          },
-        }
-      );
-    } else {
-      // Build review items: original + all linked
-      const originalItem: ReviewItem = {
-        name: productName.trim(),
-        sku: currentSku,
-        supplierSku: supplierSku.trim() || supplierSkuMap.get(currentSku) || "",
-        warehouseQty: contextStock ?? selectedProduct?.warehouseQty ?? 0,
-        minAmount: minAmountMap.get(currentSku) ?? 0,
-        quantity: quantity.trim(),
-        checked: true,
-        isOriginal: true,
-      };
+    // Build review items: original product
+    // Build product lookup for container info
+    const productLookup = new Map<string, typeof products extends (infer T)[] | undefined ? T : never>();
+    if (products) {
+      for (const p of products) productLookup.set(p.sku.trim(), p);
+    }
 
-      const linkedItems: ReviewItem[] = linked.map((item) => ({
-        name: item.name,
-        sku: item.sku,
-        supplierSku: item.supplierSku || supplierSkuMap.get(item.sku) || "",
-        warehouseQty: item.warehouseQty,
-        minAmount: item.minAmount,
-        quantity: String(item.minAmount || ""),
-        checked: true,
+    const originalItem: ReviewItem = {
+      name: productName.trim(),
+      sku: currentSku,
+      supplierSku: supplierSku.trim() || supplierSkuMap.get(currentSku) || "",
+      warehouseQty: contextStock ?? selectedProduct?.warehouseQty ?? 0,
+      minAmount: minAmountMap.get(currentSku) ?? 0,
+      quantity: quantity.trim(),
+      checked: true,
+      isOriginal: true,
+      container: selectedProduct?.container || productLookup.get(currentSku)?.container || "",
+    };
+
+    // Linked products from recipe groups
+    const linkedItems: ReviewItem[] = (linked ?? []).map((item) => ({
+      name: item.name,
+      sku: item.sku,
+      supplierSku: item.supplierSku || supplierSkuMap.get(item.sku) || "",
+      warehouseQty: item.warehouseQty,
+      minAmount: item.minAmount,
+      quantity: String(item.minAmount || ""),
+      checked: true,
+      isOriginal: false,
+      container: productLookup.get(item.sku.trim())?.container || "",
+    }));
+
+    // Low-stock suggestions (exclude original and linked SKUs)
+    const excludeSkus = new Set([currentSku, ...linkedItems.map((l) => l.sku)]);
+    const suggestionItems: ReviewItem[] = lowStockSuggestions
+      .filter((p) => !excludeSkus.has(p.sku.trim()))
+      .map((p) => ({
+        name: p.name,
+        sku: p.sku,
+        supplierSku: p.supplierSku || supplierSkuMap.get(p.sku.trim()) || "",
+        warehouseQty: p.warehouseQty,
+        minAmount: p.minAmount,
+        quantity: String(p.minAmount || ""),
+        checked: false,
         isOriginal: false,
+        isSuggestion: true,
+        container: p.container || "",
       }));
 
-      setReviewItems([originalItem, ...linkedItems]);
-      setDialogPhase("review");
-    }
+    setReviewItems([originalItem, ...linkedItems, ...suggestionItems]);
+    setDialogPhase("review");
   };
 
   const handleConfirmBatch = async () => {
@@ -279,6 +311,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     }));
     setSubmissionStatuses(initialStatuses);
 
+    let hasAnySuccess = false;
     for (let i = 0; i < checkedItems.length; i++) {
       const item = checkedItems[i];
       setSubmissionStatuses((prev) =>
@@ -294,11 +327,12 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
           productName: item.name,
           expectedDate: expectedDate.trim(),
           log: item.isOriginal ? (log.trim() || undefined) : undefined,
-          container: item.isOriginal ? (selectedProduct?.container || undefined) : undefined,
+          container: item.container || undefined,
         });
         setSubmissionStatuses((prev) =>
           prev.map((s) => s.sku === item.sku ? { ...s, status: "success" } : s)
         );
+        hasAnySuccess = true;
       } catch (err) {
         setSubmissionStatuses((prev) =>
           prev.map((s) => s.sku === item.sku ? { ...s, status: "error", error: (err as Error).message } : s)
@@ -307,6 +341,17 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     }
 
     queryClient.invalidateQueries({ queryKey: ["orders"] });
+
+    // Send consolidated daily email if at least one order succeeded
+    if (hasAnySuccess) {
+      try {
+        setEmailStatus("sending");
+        await sendDailyOrderEmail(orderDate.trim());
+        setEmailStatus("sent");
+      } catch {
+        setEmailStatus("error");
+      }
+    }
   };
 
   const handleRetry = async (sku: string) => {
@@ -326,7 +371,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         productName: item.name,
         expectedDate: expectedDate.trim(),
         log: item.isOriginal ? (log.trim() || undefined) : undefined,
-        container: item.isOriginal ? (selectedProduct?.container || undefined) : undefined,
+        container: item.container || undefined,
       });
       setSubmissionStatuses((prev) =>
         prev.map((s) => s.sku === sku ? { ...s, status: "success" } : s)
@@ -536,50 +581,66 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
 
             {/* Review items */}
             <div className="space-y-2">
-              {reviewItems.map((item, idx) => (
-                <div
-                  key={item.sku}
-                  className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-opacity ${
-                    item.checked ? "bg-background" : "opacity-50 bg-muted/30"
-                  } ${item.isOriginal ? "border-primary/30" : ""}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={item.checked}
-                    disabled={item.isOriginal}
-                    onChange={(e) => {
-                      setReviewItems((prev) =>
-                        prev.map((r, i) => i === idx ? { ...r, checked: e.target.checked } : r)
-                      );
-                    }}
-                    className="h-4 w-4 rounded border-gray-300 accent-primary shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium truncate">{item.name}</span>
-                      {item.isOriginal && (
-                        <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">מקורי</span>
+              {(() => {
+                let shownSeparator = false;
+                return reviewItems.map((item, idx) => {
+                  const showSeparator = item.isSuggestion && !shownSeparator;
+                  if (showSeparator) shownSeparator = true;
+
+                  return (
+                    <div key={item.sku}>
+                      {showSeparator && (
+                        <div className="flex items-center gap-2 pt-2 pb-1">
+                          <div className="flex-1 border-t border-dashed border-amber-400/60" />
+                          <span className="text-xs text-amber-600 font-medium whitespace-nowrap">מוצרים נוספים מתחת למינימום</span>
+                          <div className="flex-1 border-t border-dashed border-amber-400/60" />
+                        </div>
                       )}
+                      <div
+                        className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-opacity ${
+                          item.checked ? "bg-background" : "opacity-50 bg-muted/30"
+                        } ${item.isOriginal ? "border-primary/30" : ""} ${item.isSuggestion && !item.checked ? "border-amber-200" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          disabled={item.isOriginal}
+                          onChange={(e) => {
+                            setReviewItems((prev) =>
+                              prev.map((r, i) => i === idx ? { ...r, checked: e.target.checked } : r)
+                            );
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 accent-primary shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate">{item.name}</span>
+                            {item.isOriginal && (
+                              <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">מקורי</span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5">
+                            <span>מק״ט: {item.sku}</span>
+                            <span>מלאי: {item.warehouseQty}</span>
+                            {item.minAmount > 0 && <span>מינימום: {item.minAmount}</span>}
+                          </div>
+                        </div>
+                        <Input
+                          type="number"
+                          value={item.quantity}
+                          disabled={!item.checked}
+                          onChange={(e) => {
+                            setReviewItems((prev) =>
+                              prev.map((r, i) => i === idx ? { ...r, quantity: e.target.value } : r)
+                            );
+                          }}
+                          className="w-20 h-8 text-sm text-center shrink-0"
+                        />
+                      </div>
                     </div>
-                    <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5">
-                      <span>מק״ט: {item.sku}</span>
-                      <span>מלאי: {item.warehouseQty}</span>
-                      {item.minAmount > 0 && <span>מינימום: {item.minAmount}</span>}
-                    </div>
-                  </div>
-                  <Input
-                    type="number"
-                    value={item.quantity}
-                    disabled={!item.checked}
-                    onChange={(e) => {
-                      setReviewItems((prev) =>
-                        prev.map((r, i) => i === idx ? { ...r, quantity: e.target.value } : r)
-                      );
-                    }}
-                    className="w-20 h-8 text-sm text-center shrink-0"
-                  />
-                </div>
-              ))}
+                  );
+                });
+              })()}
             </div>
 
             {/* Actions */}
@@ -640,7 +701,25 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
               })}
             </div>
 
-            {allResolved && (
+            {/* Email status */}
+            {emailStatus !== "idle" && (
+              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
+                emailStatus === "sending" ? "bg-blue-50 text-blue-700" :
+                emailStatus === "sent" ? "bg-green-50 text-green-700" :
+                "bg-red-50 text-red-700"
+              }`}>
+                {emailStatus === "sending" && <Loader2 className="h-4 w-4 animate-spin" />}
+                {emailStatus === "sent" && <Mail className="h-4 w-4" />}
+                {emailStatus === "error" && <AlertCircle className="h-4 w-4" />}
+                <span>
+                  {emailStatus === "sending" && "שולח מייל מרוכז לספק..."}
+                  {emailStatus === "sent" && "מייל הזמנה נשלח בהצלחה"}
+                  {emailStatus === "error" && "שגיאה בשליחת מייל"}
+                </span>
+              </div>
+            )}
+
+            {allResolved && emailStatus !== "sending" && (
               <Button
                 className="w-full"
                 onClick={() => {

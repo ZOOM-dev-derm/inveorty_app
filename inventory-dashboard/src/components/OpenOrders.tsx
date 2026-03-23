@@ -1,8 +1,8 @@
-import { useOpenOrders, useProducts, useUpdateOrderStatus, useUpdateOrderComments } from "@/hooks/useSheetData";
+import { useOpenOrders, useProducts, useUpdateOrderStatus, useUpdateOrderComments, useSendFollowUp } from "@/hooks/useSheetData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { ShoppingCart, Loader2, Check, Calendar, Package, Clock, MessageSquare, Send } from "lucide-react";
+import { ShoppingCart, Loader2, Check, Calendar, Package, Clock, MessageSquare, Send, Mail } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Order } from "@/types";
 
@@ -84,6 +84,8 @@ function parseCommentLog(raw: string): { date: string; text: string }[] {
 function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order; index: number; mode: GroupMode; expanded?: boolean; skuNameMap: Map<string, string> }) {
   const statusMutation = useUpdateOrderStatus();
   const commentsMutation = useUpdateOrderComments();
+  const followUpMutation = useSendFollowUp();
+  const [followUpSent, setFollowUpSent] = useState(false);
   const { date: expectedDate, estimated } = getExpectedDate(order);
   const overdue = isOverdue(order);
   const [showComments, setShowComments] = useState(false);
@@ -175,6 +177,46 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
               באיחור
             </Badge>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-7 w-7 p-0 ${followUpSent ? "text-green-600" : ""}`}
+            disabled={followUpMutation.isPending}
+            title="שלח מייל מעקב לספק"
+            onClick={(e) => {
+              e.stopPropagation();
+              followUpMutation.mutate(
+                {
+                  rowIndex: order.rowIndex,
+                  orderDate: order.orderDate,
+                  supplierSku: order.supplierSku,
+                  dermaSku: order.dermaSku,
+                  quantity: order.quantity,
+                  productName: order.productName,
+                  expectedDate: order.expectedDate,
+                  container: order.container,
+                },
+                {
+                  onSuccess: () => {
+                    setFollowUpSent(true);
+                    setTimeout(() => setFollowUpSent(false), 3000);
+                  },
+                  onError: (err) => {
+                    console.error("[FollowUp] Failed:", err);
+                    alert("שגיאה בשליחת מייל מעקב. נסה שוב.");
+                  },
+                }
+              );
+            }}
+          >
+            {followUpMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : followUpSent ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <Mail className="h-3.5 w-3.5" />
+            )}
+          </Button>
           <Button
             variant="ghost"
             size="sm"

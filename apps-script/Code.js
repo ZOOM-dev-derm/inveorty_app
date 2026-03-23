@@ -48,6 +48,12 @@ function doPost(e) {
       case "bulkUpdateMinAmounts":
         result = bulkUpdateMinAmounts(ss, data);
         break;
+      case "sendFollowUp":
+        result = sendFollowUp(ss, data);
+        break;
+      case "sendDailyOrderEmail":
+        result = sendDailyOrderEmail(ss, data);
+        break;
       default:
         result = { success: false, error: "Unknown action: " + action };
     }
@@ -113,6 +119,9 @@ function addOrder(ss, data) {
   }
 
   sheet.appendRow(row);
+
+  // Per-order email removed — consolidated daily email sent via sendDailyOrderEmail action
+
   return { success: true };
 }
 
@@ -477,6 +486,697 @@ function bulkUpdateMinAmounts(ss, data) {
   }
 
   return { success: true, updated: updated, notFound: notFound };
+}
+
+// ── Email Integration (Peer Pharm / פאר פארם) ──
+
+/**
+ * Builds an RTL HTML email body with order details table.
+ */
+function buildOrderEmailHtml(data) {
+  var rows = [
+    ["שם פריט", data.productName || ""],
+    ["מק\"ט דרמה", data.dermaSku || ""],
+    ["מק\"ט פאר פארם", data.supplierSku || ""],
+    ["כמות", data.quantity || ""],
+    ["תאריך הזמנה", data.orderDate || ""],
+    ["תאריך צפי", data.expectedDate || ""],
+    ["מיכל", data.container || ""],
+  ];
+
+  var tableRows = rows
+    .filter(function (r) { return r[1]; })
+    .map(function (r) {
+      return '<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;">' +
+        r[0] + '</td><td style="padding:8px 12px;border:1px solid #ddd;">' + r[1] + '</td></tr>';
+    })
+    .join("");
+
+  return '<div dir="rtl" style="font-family:Arial,sans-serif;font-size:14px;color:#333;">' +
+    '<p>שלום רב,</p>' +
+    '<p>נא לאשר קבלת ההזמנה הבאה:</p>' +
+    '<table dir="rtl" style="border-collapse:collapse;margin:16px 0;width:100%;max-width:500px;">' +
+    tableRows +
+    '</table>' +
+    '<p>תודה,<br>Dermalusophy</p>' +
+    '</div>';
+}
+
+/**
+ * Sends an order email to the supplier.
+ * Silent no-op if SUPPLIER_EMAIL is not configured.
+ */
+function sendOrderEmail(data) {
+  var props = PropertiesService.getScriptProperties();
+  var supplierEmail = props.getProperty("SUPPLIER_EMAIL");
+  if (!supplierEmail) return;
+
+  var orderTag = "[DL-" + (data.dermaSku || "0000") + "--" + (data.orderDate || "unknown") + "]";
+  var subject = "הזמנה Dermalusophy " + orderTag + " - " + (data.productName || "");
+  var htmlBody = buildOrderEmailHtml(data);
+
+  MailApp.sendEmail({ to: supplierEmail, subject: subject, htmlBody: htmlBody });
+}
+
+/**
+ * Sends a follow-up email for an existing order.
+ * Tries to reply to the original thread; falls back to a new email.
+ * Auto-logs to the order's לוג column.
+ */
+function sendFollowUp(ss, data) {
+  var props = PropertiesService.getScriptProperties();
+  var supplierEmail = props.getProperty("SUPPLIER_EMAIL");
+  if (!supplierEmail) return { success: false, error: "SUPPLIER_EMAIL not configured in Script Properties" };
+
+  var orderTag = "[DL-" + (data.dermaSku || "0000") + "--" + (data.orderDate || "unknown") + "]";
+  var subject = "מעקב הזמנה Dermalusophy " + orderTag + " - " + (data.productName || "");
+
+  var htmlBody = '<div dir="rtl" style="font-family:Arial,sans-serif;font-size:14px;color:#333;">' +
+    '<p>שלום רב,</p>' +
+    '<p>אשמח לעדכון לגבי ההזמנה הבאה:</p>' +
+    buildOrderEmailHtml(data) +
+    '</div>';
+
+  // Try to find existing thread to reply to
+  try {
+    var threads = GmailApp.search('subject:"' + orderTag + '"', 0, 1);
+    if (threads.length > 0) {
+      threads[0].reply("", { htmlBody: htmlBody });
+    } else {
+      MailApp.sendEmail({ to: supplierEmail, subject: subject, htmlBody: htmlBody });
+    }
+  } catch (e) {
+    // Fallback to MailApp if GmailApp not authorized
+    MailApp.sendEmail({ to: supplierEmail, subject: subject, htmlBody: htmlBody });
+  }
+
+  // Auto-log the follow-up to the order's לוג column
+  if (data.rowIndex) {
+    var today = new Date();
+    var dateStr = Utilities.formatDate(today, "Asia/Jerusalem", "dd/MM/yyyy HH:mm");
+    var logEntry = dateStr + ": נשלח מייל מעקב לספק";
+    try {
+      updateOrderComments(ss, { rowIndex: data.rowIndex, comment: logEntry });
+    } catch (e) {
+      Logger.log("Failed to log follow-up: " + e);
+    }
+  }
+
+  return { success: true };
+}
+
+// ── Consolidated Daily Order Email with Excel ──
+
+/**
+ * Sends a consolidated email with an Excel attachment containing all orders from a given date.
+ * Replaces per-order emails — called once after a batch of orders is submitted.
+ */
+function sendDailyOrderEmail(ss, data) {
+  var props = PropertiesService.getScriptProperties();
+  var supplierEmail = props.getProperty("SUPPLIER_EMAIL");
+  if (!supplierEmail) return { success: false, error: "SUPPLIER_EMAIL not configured in Script Properties" };
+
+  var orderDate = data.orderDate || "";
+  if (!orderDate) return { success: false, error: "orderDate is required" };
+
+  var sheet = getSheetByGid(ss, ORDERS_GID);
+  if (!sheet) return { success: false, error: "Orders sheet not found" };
+
+  // Read all data
+  var allData = sheet.getDataRange().getValues();
+  if (allData.length < 2) return { success: false, error: "No orders found" };
+
+  var headers = allData[0].map(function(h) { return h.toString().trim(); });
+
+  // Find the order date column
+  var dateColIdx = -1;
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i].indexOf("תאריך הזמנה") !== -1) { dateColIdx = i; break; }
+  }
+  if (dateColIdx === -1) return { success: false, error: "תאריך הזמנה column not found" };
+
+  // Filter rows matching the given order date
+  var matchingRows = [];
+  for (var r = 1; r < allData.length; r++) {
+    var cellDate = allData[r][dateColIdx].toString().trim();
+    if (cellDate === orderDate) {
+      matchingRows.push(allData[r]);
+    }
+  }
+
+  if (matchingRows.length === 0) return { success: false, error: "No orders found for date " + orderDate };
+
+  // Excel column order as specified
+  var excelHeaders = [
+    "תאריך הזמנה", "מק\"ט פאר-פארם", "כמות סה\"כ", "מיכל", "תכולה",
+    "שם פריט", "פורמולה", "קוד דרמה", "חלוקה+הערות", "ייצור איתי",
+    "אריזות ומדבקות", "בקבוקים", "התקבל", "תאריך צפי", "לוג"
+  ];
+
+  // Map each excel header to the sheet column index (fuzzy match)
+  var colMapping = [];
+  for (var e = 0; e < excelHeaders.length; e++) {
+    var target = excelHeaders[e];
+    var found = -1;
+    // Try exact match first
+    for (var c = 0; c < headers.length; c++) {
+      if (headers[c] === target) { found = c; break; }
+    }
+    // Fuzzy match if not found
+    if (found === -1) {
+      for (var c2 = 0; c2 < headers.length; c2++) {
+        if (headers[c2].indexOf(target) !== -1 || target.indexOf(headers[c2]) !== -1) { found = c2; break; }
+      }
+    }
+    colMapping.push(found);
+  }
+
+  // Build data rows for the Excel
+  var excelData = [excelHeaders];
+  for (var m = 0; m < matchingRows.length; m++) {
+    var row = [];
+    for (var col = 0; col < colMapping.length; col++) {
+      row.push(colMapping[col] !== -1 ? (matchingRows[m][colMapping[col]] || "").toString() : "");
+    }
+    excelData.push(row);
+  }
+
+  // Create temporary spreadsheet, populate, export as xlsx
+  var tempSs = SpreadsheetApp.create("Dermalusophy Orders " + orderDate);
+  var tempSheet = tempSs.getActiveSheet();
+  tempSheet.setRightToLeft(true);
+  tempSheet.getRange(1, 1, excelData.length, excelHeaders.length).setValues(excelData);
+
+  // Style header row
+  var headerRange = tempSheet.getRange(1, 1, 1, excelHeaders.length);
+  headerRange.setFontWeight("bold");
+  headerRange.setBackground("#4472C4");
+  headerRange.setFontColor("#FFFFFF");
+
+  // Auto-resize columns
+  for (var ar = 1; ar <= excelHeaders.length; ar++) {
+    tempSheet.autoResizeColumn(ar);
+  }
+
+  SpreadsheetApp.flush();
+
+  // Export as xlsx
+  var xlsxBlob = DriveApp.getFileById(tempSs.getId())
+    .getAs("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    .setName("Dermalusophy_Orders_" + orderDate.replace(/\//g, "-") + ".xlsx");
+
+  // Build email HTML body with summary
+  var summaryHtml = '<div dir="rtl" style="font-family:Arial,sans-serif;font-size:14px;color:#333;">' +
+    '<p>שלום רב,</p>' +
+    '<p>מצורפת טבלת הזמנות מתאריך <b>' + orderDate + '</b> (' + matchingRows.length + ' פריטים).</p>' +
+    '<p>נא לאשר קבלת ההזמנה.</p>' +
+    '<p>תודה,<br>Dermalusophy</p>' +
+    '</div>';
+
+  var subject = "הזמנות Dermalusophy - " + orderDate;
+
+  MailApp.sendEmail({
+    to: supplierEmail,
+    subject: subject,
+    htmlBody: summaryHtml,
+    attachments: [xlsxBlob],
+  });
+
+  // Clean up temporary spreadsheet
+  DriveApp.getFileById(tempSs.getId()).setTrashed(true);
+
+  return { success: true, count: matchingRows.length };
+}
+
+// ── Gmail Polling + LLM Auto-logging ──
+
+/**
+ * Calls an LLM API to parse a supplier email reply into a concise Hebrew summary (plain text).
+ * Used by the tagged-email flow. Supports Claude and OpenAI APIs.
+ */
+function callLlmPlainText(provider, apiKey, emailBody, subject) {
+  var prompt = 'You are an assistant that extracts order status information from supplier email replies.\n' +
+    'The supplier is פאר פארם (Peer Pharm). Their contact is Firas (פיראס) at operating2@peerpharm.com.\n' +
+    'Emails are in Hebrew. Extract the key status update per product/SKU mentioned.\n\n' +
+    'Common status keywords from this supplier:\n' +
+    '- סופק = supplied/delivered\n' +
+    '- בעבודה = in production\n' +
+    '- תוקן = fixed/corrected\n' +
+    '- בוצע מיון = sorting completed\n' +
+    '- נמתין לקבלת = waiting to receive (components/labels)\n' +
+    '- נייצר = will produce\n' +
+    '- קיבלתי והכנסתי את ההזמנה = order received and entered\n' +
+    '- הכל טופל = everything handled\n\n' +
+    'Return ONLY a concise Hebrew summary (max 100 chars). Include SKU numbers if mentioned.\n' +
+    'Examples: "סופק", "בעבודה, צפי שבוע הבא", "קיבלתי ההזמנה", "סופק 2338 יח, 316 לתיקון".\n\n' +
+    'Subject: ' + subject + '\n\nEmail body:\n' + emailBody;
+
+  var url, payload, headers;
+
+  if (provider === "claude") {
+    url = "https://api.anthropic.com/v1/messages";
+    headers = {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01"
+    };
+    payload = {
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 150,
+      messages: [{ role: "user", content: prompt }]
+    };
+  } else {
+    // OpenAI
+    url = "https://api.openai.com/v1/chat/completions";
+    headers = {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + apiKey
+    };
+    payload = {
+      model: "gpt-4o-mini",
+      max_tokens: 150,
+      messages: [{ role: "user", content: prompt }]
+    };
+  }
+
+  var response = UrlFetchApp.fetch(url, {
+    method: "post",
+    headers: headers,
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  var json = JSON.parse(response.getContentText());
+
+  if (provider === "claude") {
+    return (json.content && json.content[0] && json.content[0].text) || "";
+  } else {
+    return (json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) || "";
+  }
+}
+
+/**
+ * Calls an LLM API to extract structured SKU-level status from a supplier email.
+ * Returns an array of {sku, status, quantity, expectedDate, confirmed} objects.
+ */
+function callLlmStructured(provider, apiKey, emailBody, subject) {
+  var today = new Date();
+  var todayStr = Utilities.formatDate(today, "Asia/Jerusalem", "dd/MM/yyyy");
+
+  var prompt = 'You parse supplier emails from פאר פארם about cosmetics orders.\n' +
+    'Extract every product SKU mentioned with its status.\n' +
+    'Return ONLY a JSON array (no markdown, no explanation).\n' +
+    'Today\'s date: ' + todayStr + '\n\n' +
+    'Each item: {"sku":"string","status":"string","quantity":number|null,"expectedDate":"DD/MM/YYYY"|null,"confirmed":boolean}\n\n' +
+    'Rules:\n' +
+    '- sku = numeric product code (the supplier\'s SKU number)\n' +
+    '- status = concise Hebrew: סופק/בעבודה/נייצר/תוקן/ממתין etc.\n' +
+    '- quantity = number if explicitly stated, null otherwise\n' +
+    '- expectedDate = resolve relative dates (שבוע הבא → +7d, שבועיים → +14d) to DD/MM/YYYY. null if none.\n' +
+    '- confirmed = true only if explicitly confirms order receipt (קיבלתי/אושר/מאשר)\n\n' +
+    'If the email has no order/production info, return [].\n\n' +
+    'Subject: ' + subject + '\n\nEmail body:\n' + emailBody;
+
+  var url, payload, headers;
+
+  if (provider === "claude") {
+    url = "https://api.anthropic.com/v1/messages";
+    headers = {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01"
+    };
+    payload = {
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 500,
+      messages: [{ role: "user", content: prompt }]
+    };
+  } else {
+    url = "https://api.openai.com/v1/chat/completions";
+    headers = {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + apiKey
+    };
+    payload = {
+      model: "gpt-4o-mini",
+      max_tokens: 500,
+      messages: [{ role: "user", content: prompt }]
+    };
+  }
+
+  var response = UrlFetchApp.fetch(url, {
+    method: "post",
+    headers: headers,
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  var json = JSON.parse(response.getContentText());
+  var raw;
+  if (provider === "claude") {
+    raw = (json.content && json.content[0] && json.content[0].text) || "[]";
+  } else {
+    raw = (json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) || "[]";
+  }
+
+  // Strip markdown fences if present
+  raw = raw.replace(/```(?:json)?\s*/g, "").replace(/```\s*/g, "").trim();
+
+  try {
+    var parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    Logger.log("callLlmStructured: JSON parse failed: " + raw);
+    return [];
+  }
+}
+
+/**
+ * Reads the orders sheet header row once and returns a map of 0-based column indices.
+ */
+function getOrdersColumnMap(sheet) {
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var colMap = {
+    supplierSku: -1,
+    dermaSku: -1,
+    received: -1,
+    log: -1,
+    expectedDate: -1,
+    orderDate: -1
+  };
+
+  for (var i = 0; i < headers.length; i++) {
+    var h = headers[i].toString().trim();
+    if (h.indexOf("פאר") !== -1 && h.indexOf("פארם") !== -1) colMap.supplierSku = i;
+    if (h.indexOf("קוד") !== -1 && h.indexOf("דרמה") !== -1) colMap.dermaSku = i;
+    if (h.indexOf("התקבל") !== -1) colMap.received = i;
+    if (h === "לוג" || (colMap.log === -1 && h.indexOf("לוג") !== -1)) colMap.log = i;
+    if (h.indexOf("צפי") !== -1) colMap.expectedDate = i;
+    if (h === "תאריך הזמנה" || h.indexOf("תאריך הזמנה") !== -1) colMap.orderDate = i;
+  }
+
+  return colMap;
+}
+
+/**
+ * Builds an index of open orders by supplier SKU (and derma SKU as fallback).
+ * Only includes rows where התקבל is not a "received" value.
+ */
+function buildSupplierSkuIndex(sheet, colMap) {
+  var data = sheet.getDataRange().getValues();
+  var receivedValues = ["כן", "v", "✓", "true", "yes"];
+  var index = {};
+
+  for (var r = 1; r < data.length; r++) {
+    // Check if order is open (not received)
+    var receivedVal = colMap.received !== -1 ? data[r][colMap.received].toString().trim().toLowerCase() : "";
+    if (receivedValues.indexOf(receivedVal) !== -1) continue;
+
+    var supplierSku = colMap.supplierSku !== -1 ? data[r][colMap.supplierSku].toString().trim() : "";
+    var dermaSku = colMap.dermaSku !== -1 ? data[r][colMap.dermaSku].toString().trim() : "";
+
+    var entry = { rowNum: r + 1, dermaSku: dermaSku, supplierSku: supplierSku };
+
+    if (supplierSku) {
+      if (!index[supplierSku]) index[supplierSku] = [];
+      index[supplierSku].push(entry);
+    }
+    if (dermaSku) {
+      var dermaKey = "derma_" + dermaSku;
+      if (!index[dermaKey]) index[dermaKey] = [];
+      index[dermaKey].push(entry);
+    }
+  }
+
+  return index;
+}
+
+/**
+ * Processes LLM-extracted items from a supplier email against open orders.
+ * Matches by supplier SKU (primary) or derma SKU (fallback), writes log + expectedDate.
+ */
+function processSupplierEmail(sheet, colMap, skuIndex, items, emailDate) {
+  var updated = 0;
+
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    if (!item.sku) continue;
+
+    var sku = item.sku.toString().trim();
+    var matches = skuIndex[sku] || skuIndex["derma_" + sku];
+    if (!matches || matches.length === 0) {
+      Logger.log("processSupplierEmail: no open order for SKU " + sku);
+      continue;
+    }
+
+    // Build the log entry
+    var statusText = item.confirmed ? "אושר ✓ " + (item.status || "") : (item.status || "");
+    var logEntry = emailDate + ": [ספק] " + statusText;
+    if (item.quantity != null) {
+      logEntry += " - " + item.quantity + " יח'";
+    }
+
+    // Write to ALL matching open orders
+    for (var m = 0; m < matches.length; m++) {
+      var rowNum = matches[m].rowNum;
+
+      // Deduplication: check if log already has this date + status
+      if (colMap.log !== -1) {
+        var existingLog = sheet.getRange(rowNum, colMap.log + 1).getValue().toString().trim();
+        if (existingLog.indexOf(emailDate + ": [ספק] " + (item.status || "").substring(0, 10)) !== -1) {
+          Logger.log("processSupplierEmail: skipping duplicate for row " + rowNum + " SKU " + sku);
+          continue;
+        }
+
+        var finalLog = existingLog ? existingLog + " | " + logEntry : logEntry;
+        sheet.getRange(rowNum, colMap.log + 1).setValue(finalLog);
+      }
+
+      // Update expected date if provided
+      if (item.expectedDate && colMap.expectedDate !== -1) {
+        sheet.getRange(rowNum, colMap.expectedDate + 1).setValue(item.expectedDate);
+      }
+
+      updated++;
+      Logger.log("processSupplierEmail: updated row " + rowNum + " SKU " + sku + " → " + logEntry);
+    }
+  }
+
+  return updated;
+}
+
+/**
+ * Finds a matching order row by dermaSku + orderDate and appends a supplier reply summary to the לוג column.
+ */
+function appendSupplierReplyToLog(sheet, dermaSku, orderDate, parsedText) {
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // Find derma SKU column
+  var dermaCol = -1;
+  for (var i = 0; i < headers.length; i++) {
+    var h = headers[i].toString();
+    if (h.indexOf("קוד") !== -1 && h.indexOf("דרמה") !== -1) { dermaCol = i; break; }
+  }
+
+  // Find order date column
+  var dateCol = -1;
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i].toString().indexOf("תאריך הזמנה") !== -1) { dateCol = i; break; }
+  }
+
+  // Find לוג column
+  var logCol = -1;
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i].toString().trim() === "לוג") { logCol = i + 1; break; }
+  }
+  if (logCol === -1) {
+    for (var i = 0; i < headers.length; i++) {
+      if (headers[i].toString().indexOf("לוג") !== -1) { logCol = i + 1; break; }
+    }
+  }
+
+  if (dermaCol === -1 || logCol === -1) {
+    Logger.log("appendSupplierReplyToLog: required columns not found");
+    return false;
+  }
+
+  var data = sheet.getDataRange().getValues();
+  for (var r = 1; r < data.length; r++) {
+    var rowSku = data[r][dermaCol].toString().trim();
+    var rowDate = dateCol !== -1 ? data[r][dateCol].toString().trim() : "";
+
+    if (rowSku === dermaSku && (dateCol === -1 || rowDate === orderDate)) {
+      var range = sheet.getRange(r + 1, logCol);
+      var existing = range.getValue().toString().trim();
+      var today = new Date();
+      var dateStr = Utilities.formatDate(today, "Asia/Jerusalem", "dd/MM/yyyy HH:mm");
+      var entry = dateStr + ": [ספק] " + parsedText;
+      var finalValue = existing ? existing + " | " + entry : entry;
+      range.setValue(finalValue);
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Polls Gmail for unread supplier replies, parses them via LLM, and logs to matching orders.
+ * Intended to run on a 15-minute time-based trigger.
+ */
+function pollSupplierReplies() {
+  var props = PropertiesService.getScriptProperties();
+  var supplierEmail = props.getProperty("SUPPLIER_EMAIL");
+  var apiKey = props.getProperty("LLM_API_KEY");
+  var provider = props.getProperty("LLM_PROVIDER") || "claude";
+
+  if (!supplierEmail || !apiKey) {
+    Logger.log("pollSupplierReplies: SUPPLIER_EMAIL or LLM_API_KEY not configured");
+    return;
+  }
+
+  var threads = GmailApp.search("from:" + supplierEmail + " is:unread", 0, 20);
+  if (threads.length === 0) return;
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = getSheetByGid(ss, ORDERS_GID);
+  if (!sheet) {
+    Logger.log("pollSupplierReplies: Orders sheet not found");
+    return;
+  }
+
+  // Build column map and SKU index once before the loop
+  var colMap = getOrdersColumnMap(sheet);
+  var skuIndex = buildSupplierSkuIndex(sheet, colMap);
+
+  for (var t = 0; t < threads.length; t++) {
+    var messages = threads[t].getMessages();
+    var lastMessage = messages[messages.length - 1];
+    var subject = lastMessage.getSubject();
+    var body = lastMessage.getPlainBody();
+    var emailDate = Utilities.formatDate(lastMessage.getDate(), "Asia/Jerusalem", "dd/MM/yyyy");
+
+    // Extract order tag [DL-{dermaSku}--{orderDate}]
+    var tagMatch = subject.match(/\[DL-([^\]]+?)--([^\]]+?)\]/);
+
+    try {
+      if (tagMatch) {
+        // Tagged flow: existing behavior
+        var dermaSku = tagMatch[1];
+        var orderDate = tagMatch[2];
+        var parsed = callLlmPlainText(provider, apiKey, body, subject);
+        if (parsed) {
+          parsed = parsed.trim().substring(0, 100);
+          appendSupplierReplyToLog(sheet, dermaSku, orderDate, parsed);
+          Logger.log("pollSupplierReplies: logged tagged reply for DL-" + dermaSku + "--" + orderDate + ": " + parsed);
+        }
+      } else {
+        // Untagged flow: extract SKUs via structured LLM call
+        var items = callLlmStructured(provider, apiKey, body, subject);
+        if (items.length > 0) {
+          var count = processSupplierEmail(sheet, colMap, skuIndex, items, emailDate);
+          Logger.log("pollSupplierReplies: untagged email processed, " + count + " orders updated. Subject: " + subject);
+        } else {
+          Logger.log("pollSupplierReplies: no SKUs extracted from untagged email: " + subject);
+        }
+      }
+    } catch (e) {
+      Logger.log("pollSupplierReplies: failed for " + subject + ": " + e);
+    }
+
+    threads[t].markRead();
+  }
+
+  props.setProperty("LAST_POLL_TIME", new Date().toISOString());
+}
+
+/**
+ * Backfills order logs from recent supplier emails (last 30 days).
+ * Run manually from the Apps Script editor. Non-destructive: does not mark emails as read.
+ * Safety limit: max 50 LLM calls per run.
+ */
+function backfillFromEmails() {
+  var props = PropertiesService.getScriptProperties();
+  var apiKey = props.getProperty("LLM_API_KEY");
+  var provider = props.getProperty("LLM_PROVIDER") || "claude";
+
+  if (!apiKey) {
+    Logger.log("backfillFromEmails: LLM_API_KEY not configured");
+    return;
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = getSheetByGid(ss, ORDERS_GID);
+  if (!sheet) {
+    Logger.log("backfillFromEmails: Orders sheet not found");
+    return;
+  }
+
+  var colMap = getOrdersColumnMap(sheet);
+  var skuIndex = buildSupplierSkuIndex(sheet, colMap);
+
+  var threads = GmailApp.search("from:operating2@peerpharm.com newer_than:30d", 0, 50);
+  Logger.log("backfillFromEmails: found " + threads.length + " threads");
+
+  // Collect all messages, sorted chronologically (oldest first)
+  var allMessages = [];
+  for (var t = 0; t < threads.length; t++) {
+    var messages = threads[t].getMessages();
+    for (var m = 0; m < messages.length; m++) {
+      allMessages.push(messages[m]);
+    }
+  }
+  allMessages.sort(function (a, b) { return a.getDate().getTime() - b.getDate().getTime(); });
+
+  var llmCalls = 0;
+  var totalUpdated = 0;
+
+  for (var i = 0; i < allMessages.length && llmCalls < 50; i++) {
+    var msg = allMessages[i];
+    var subject = msg.getSubject();
+    var body = msg.getPlainBody();
+
+    // Skip tagged emails (already handled by pollSupplierReplies)
+    if (/\[DL-/.test(subject)) continue;
+
+    // Skip very short emails (empty/signature-only)
+    if (!body || body.trim().length < 20) continue;
+
+    var emailDate = Utilities.formatDate(msg.getDate(), "Asia/Jerusalem", "dd/MM/yyyy");
+
+    try {
+      var items = callLlmStructured(provider, apiKey, body, subject);
+      llmCalls++;
+
+      if (items.length > 0) {
+        var count = processSupplierEmail(sheet, colMap, skuIndex, items, emailDate);
+        totalUpdated += count;
+        Logger.log("backfillFromEmails: " + emailDate + " — " + items.length + " SKUs extracted, " + count + " orders updated. Subject: " + subject);
+      }
+    } catch (e) {
+      Logger.log("backfillFromEmails: LLM failed for " + subject + ": " + e);
+      llmCalls++;
+    }
+  }
+
+  Logger.log("backfillFromEmails: done. LLM calls: " + llmCalls + ", orders updated: " + totalUpdated);
+}
+
+/**
+ * Run once from the Apps Script editor to create a 15-minute polling trigger.
+ */
+function setupPollTrigger() {
+  // Remove existing triggers for this function
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === "pollSupplierReplies") {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  ScriptApp.newTrigger("pollSupplierReplies")
+    .timeBased()
+    .everyMinutes(15)
+    .create();
+  Logger.log("Poll trigger created: every 15 minutes");
 }
 
 // Required for CORS preflight

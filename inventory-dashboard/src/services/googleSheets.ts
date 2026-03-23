@@ -250,3 +250,20 @@ export async function syncMissingProducts() {
 export async function syncSupplierSkus() {
   return postToSheet("syncSupplierSkus");
 }
+
+export async function sendFollowUp(data: {
+  rowIndex: number;
+  orderDate: string;
+  supplierSku: string;
+  dermaSku: string;
+  quantity: string;
+  productName: string;
+  expectedDate: string;
+  container?: string;
+}) {
+  return postToSheet("sendFollowUp", data);
+}
+
+export async function sendDailyOrderEmail(orderDate: string) {
+  return postToSheet("sendDailyOrderEmail", { orderDate });
+}

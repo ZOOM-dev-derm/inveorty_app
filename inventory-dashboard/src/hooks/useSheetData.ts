@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { fetchProducts, fetchOrders, fetchHistory, fetchConnectedProducts, addProduct, addOrder, updateOrderStatus, updateOrderComments, syncMissingProducts, syncSupplierSkus } from "@/services/googleSheets";
+import { fetchProducts, fetchOrders, fetchHistory, fetchConnectedProducts, addProduct, addOrder, updateOrderStatus, updateOrderComments, syncMissingProducts, syncSupplierSkus, sendFollowUp } from "@/services/googleSheets";
 import type { Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint, ConnectedProduct } from "@/types";
 
 const FIVE_MINUTES = 5 * 60 * 1000;
@@ -473,6 +473,27 @@ export function useSyncMissingProducts() {
     mutationFn: () => syncMissingProducts(),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useSendFollowUp() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      rowIndex: number;
+      orderDate: string;
+      supplierSku: string;
+      dermaSku: string;
+      quantity: string;
+      productName: string;
+      expectedDate: string;
+      container?: string;
+    }) => sendFollowUp(data),
+    onSuccess: () => {
+      setTimeout(() => {
+        client.invalidateQueries({ queryKey: ["orders"] });
+      }, 5000);
     },
   });
 }
