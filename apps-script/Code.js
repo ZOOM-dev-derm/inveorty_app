@@ -616,9 +616,17 @@ function sendDailyOrderEmail(ss, data) {
   if (dateColIdx === -1) return { success: false, error: "תאריך הזמנה column not found" };
 
   // Filter rows matching the given order date
+  // Google Sheets may return Date objects or strings — normalize both to DD/MM/YYYY
+  function formatCellDate(val) {
+    if (val instanceof Date && !isNaN(val.getTime())) {
+      return Utilities.formatDate(val, "Asia/Jerusalem", "dd/MM/yyyy");
+    }
+    return val.toString().trim();
+  }
+
   var matchingRows = [];
   for (var r = 1; r < allData.length; r++) {
-    var cellDate = allData[r][dateColIdx].toString().trim();
+    var cellDate = formatCellDate(allData[r][dateColIdx]);
     if (cellDate === orderDate) {
       matchingRows.push(allData[r]);
     }
@@ -661,35 +669,40 @@ function sendDailyOrderEmail(ss, data) {
     excelData.push(row);
   }
 
-  // Create temporary spreadsheet, populate, export as xlsx
-  var tempSs = SpreadsheetApp.create("Dermalusophy Orders " + orderDate);
-  var tempSheet = tempSs.getActiveSheet();
-  tempSheet.setRightToLeft(true);
-  tempSheet.getRange(1, 1, excelData.length, excelHeaders.length).setValues(excelData);
+  // Build CSV content for attachment
+  var csvLines = excelData.map(function(row) {
+    return row.map(function(cell) {
+      var s = cell.toString();
+      if (s.indexOf(",") !== -1 || s.indexOf('"') !== -1 || s.indexOf("\n") !== -1) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }).join(",");
+  });
+  var csvContent = "\uFEFF" + csvLines.join("\r\n"); // BOM for Excel Hebrew support
+  var csvBlob = Utilities.newBlob(csvContent, "text/csv", "Dermalusophy_Orders_" + orderDate.replace(/\//g, "-") + ".csv");
 
-  // Style header row
-  var headerRange = tempSheet.getRange(1, 1, 1, excelHeaders.length);
-  headerRange.setFontWeight("bold");
-  headerRange.setBackground("#4472C4");
-  headerRange.setFontColor("#FFFFFF");
-
-  // Auto-resize columns
-  for (var ar = 1; ar <= excelHeaders.length; ar++) {
-    tempSheet.autoResizeColumn(ar);
+  // Build email HTML body with summary and inline table
+  var tableRows = "";
+  for (var t = 0; t < matchingRows.length; t++) {
+    var nameIdx = colMapping[5]; // שם פריט
+    var qtyIdx = colMapping[2];  // כמות סה"כ
+    var skuIdx = colMapping[7];  // קוד דרמה
+    tableRows += '<tr><td style="padding:6px 10px;border:1px solid #ddd;">' +
+      (nameIdx !== -1 ? matchingRows[t][nameIdx] || "" : "") + '</td><td style="padding:6px 10px;border:1px solid #ddd;">' +
+      (skuIdx !== -1 ? matchingRows[t][skuIdx] || "" : "") + '</td><td style="padding:6px 10px;border:1px solid #ddd;">' +
+      (qtyIdx !== -1 ? matchingRows[t][qtyIdx] || "" : "") + '</td></tr>';
   }
 
-  SpreadsheetApp.flush();
-
-  // Export as xlsx
-  var xlsxBlob = DriveApp.getFileById(tempSs.getId())
-    .getAs("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    .setName("Dermalusophy_Orders_" + orderDate.replace(/\//g, "-") + ".xlsx");
-
-  // Build email HTML body with summary
   var summaryHtml = '<div dir="rtl" style="font-family:Arial,sans-serif;font-size:14px;color:#333;">' +
     '<p>שלום רב,</p>' +
     '<p>מצורפת טבלת הזמנות מתאריך <b>' + orderDate + '</b> (' + matchingRows.length + ' פריטים).</p>' +
     '<p>נא לאשר קבלת ההזמנה.</p>' +
+    '<table dir="rtl" style="border-collapse:collapse;margin:16px 0;width:100%;max-width:600px;">' +
+    '<tr><th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">שם פריט</th>' +
+    '<th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">קוד דרמה</th>' +
+    '<th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">כמות</th></tr>' +
+    tableRows + '</table>' +
     '<p>תודה,<br>Dermalusophy</p>' +
     '</div>';
 
@@ -699,11 +712,8 @@ function sendDailyOrderEmail(ss, data) {
     to: supplierEmail,
     subject: subject,
     htmlBody: summaryHtml,
-    attachments: [xlsxBlob],
+    attachments: [csvBlob],
   });
-
-  // Clean up temporary spreadsheet
-  DriveApp.getFileById(tempSs.getId()).setTrashed(true);
 
   return { success: true, count: matchingRows.length };
 }
