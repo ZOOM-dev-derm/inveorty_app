@@ -782,8 +782,8 @@ function sendDailyOrderEmail(ss, data) {
         cellVal = prevOrder["שם פריט"];
       }
 
-      // 2. If empty, try previous orders for same dermaSku
-      if (!cellVal.trim() && dermaSku && prevOrder[headerName]) {
+      // 2. If empty, try previous orders for same dermaSku (skip אריזות ומדבקות — delivery log, not template)
+      if (!cellVal.trim() && dermaSku && prevOrder[headerName] && headerName !== "אריזות ומדבקות") {
         cellVal = prevOrder[headerName];
         // Resolve container name if needed
         if (headerName === "מיכל") {
