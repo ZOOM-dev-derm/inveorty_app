@@ -634,6 +634,41 @@ function sendDailyOrderEmail(ss, data) {
 
   if (matchingRows.length === 0) return { success: false, error: "No orders found for date " + orderDate };
 
+  // ── Build Products lookup to fill missing columns ──
+  var productsSheet = getSheetByGid(ss, PRODUCTS_GID);
+  var productLookup = {}; // dermaSku → { header: value, ... }
+  if (productsSheet) {
+    var prodData = productsSheet.getDataRange().getValues();
+    if (prodData.length > 1) {
+      var prodHeaders = prodData[0].map(function(h) { return h.toString().trim(); });
+      // Find the SKU column (פריט, not שם פריט)
+      var prodSkuCol = -1;
+      for (var pi = 0; pi < prodHeaders.length; pi++) {
+        if (prodHeaders[pi] === "פריט") { prodSkuCol = pi; break; }
+      }
+      if (prodSkuCol === -1) {
+        for (var pi2 = 0; pi2 < prodHeaders.length; pi2++) {
+          if (prodHeaders[pi2].indexOf("פריט") !== -1 && prodHeaders[pi2].indexOf("שם") === -1) { prodSkuCol = pi2; break; }
+        }
+      }
+      if (prodSkuCol !== -1) {
+        for (var pr = 1; pr < prodData.length; pr++) {
+          var pSku = prodData[pr][prodSkuCol].toString().trim();
+          if (pSku) {
+            var pRow = {};
+            for (var ph = 0; ph < prodHeaders.length; ph++) {
+              var val = prodData[pr][ph];
+              pRow[prodHeaders[ph]] = (val instanceof Date && !isNaN(val.getTime()))
+                ? Utilities.formatDate(val, "Asia/Jerusalem", "dd/MM/yyyy")
+                : (val || "").toString().trim();
+            }
+            productLookup[pSku] = pRow;
+          }
+        }
+      }
+    }
+  }
+
   // Excel column order as specified
   var excelHeaders = [
     "תאריך הזמנה", "מק\"ט פאר-פארם", "כמות סה\"כ", "מיכל", "תכולה",
@@ -641,16 +676,14 @@ function sendDailyOrderEmail(ss, data) {
     "אריזות ומדבקות", "בקבוקים", "התקבל", "תאריך צפי", "לוג"
   ];
 
-  // Map each excel header to the sheet column index (fuzzy match)
+  // Map each excel header to the Orders sheet column index (fuzzy match)
   var colMapping = [];
   for (var e = 0; e < excelHeaders.length; e++) {
     var target = excelHeaders[e];
     var found = -1;
-    // Try exact match first
     for (var c = 0; c < headers.length; c++) {
       if (headers[c] === target) { found = c; break; }
     }
-    // Fuzzy match if not found
     if (found === -1) {
       for (var c2 = 0; c2 < headers.length; c2++) {
         if (headers[c2].indexOf(target) !== -1 || target.indexOf(headers[c2]) !== -1) { found = c2; break; }
@@ -659,12 +692,47 @@ function sendDailyOrderEmail(ss, data) {
     colMapping.push(found);
   }
 
-  // Build data rows for the Excel
+  // Find dermaSku column index in orders for product lookup
+  var dermaSkuColIdx = -1;
+  for (var di = 0; di < headers.length; di++) {
+    if (headers[di].indexOf("קוד") !== -1 && headers[di].indexOf("דרמה") !== -1) { dermaSkuColIdx = di; break; }
+  }
+
+  // Build data rows — format dates and fill from Products when order cell is empty
   var excelData = [excelHeaders];
   for (var m = 0; m < matchingRows.length; m++) {
+    var orderRow = matchingRows[m];
+    var dermaSku = dermaSkuColIdx !== -1 ? orderRow[dermaSkuColIdx].toString().trim() : "";
+    var product = productLookup[dermaSku] || {};
+
     var row = [];
-    for (var col = 0; col < colMapping.length; col++) {
-      row.push(colMapping[col] !== -1 ? (matchingRows[m][colMapping[col]] || "").toString() : "");
+    for (var col = 0; col < excelHeaders.length; col++) {
+      var cellVal = "";
+      // Try order sheet first
+      if (colMapping[col] !== -1) {
+        var raw = orderRow[colMapping[col]];
+        cellVal = (raw instanceof Date && !isNaN(raw.getTime()))
+          ? Utilities.formatDate(raw, "Asia/Jerusalem", "dd/MM/yyyy")
+          : (raw || "").toString();
+      }
+      // If empty, try Products sheet (fuzzy header match)
+      if (!cellVal.trim() && dermaSku) {
+        var headerTarget = excelHeaders[col];
+        // Try exact match in product
+        if (product[headerTarget]) {
+          cellVal = product[headerTarget];
+        } else {
+          // Fuzzy match against product headers
+          for (var pk in product) {
+            if (product.hasOwnProperty(pk) && product[pk] &&
+                (pk.indexOf(headerTarget) !== -1 || headerTarget.indexOf(pk) !== -1)) {
+              cellVal = product[pk];
+              break;
+            }
+          }
+        }
+      }
+      row.push(cellVal);
     }
     excelData.push(row);
   }
