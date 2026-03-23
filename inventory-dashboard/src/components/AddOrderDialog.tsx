@@ -240,13 +240,23 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       setQuantity(String(minAmt));
     }
 
-    // Auto-fill from previous order
+    // Auto-fill from previous order (if orders already loaded)
     const prev = prevOrderMap.get(product.sku.trim());
     if (prev) {
       setDistributionNotes(prev.distributionNotes);
       setPackagingLabels(prev.packagingLabels);
     }
   };
+
+  // Re-fill from previous order when orders data loads after product selection
+  useEffect(() => {
+    if (!selectedProduct || prevOrderMap.size === 0) return;
+    const prev = prevOrderMap.get(selectedProduct.sku.trim());
+    if (prev) {
+      if (!distributionNotes) setDistributionNotes(prev.distributionNotes);
+      if (!packagingLabels) setPackagingLabels(prev.packagingLabels);
+    }
+  }, [selectedProduct, prevOrderMap]);
 
   const handleClearProduct = () => {
     setSelectedProduct(null);
