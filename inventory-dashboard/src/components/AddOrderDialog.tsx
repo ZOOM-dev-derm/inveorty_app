@@ -175,7 +175,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       setQuantity(initialData.quantity);
       setExpectedDate(initialData.expectedDate);
       setOrderDate(initialData.orderDate ?? todayFormatted());
-      setSupplierSku("");
       setLog("");
       setSearchQuery(initialData.productName);
       setContextStock(initialData.currentStock);
@@ -186,7 +185,14 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         const match = products.find((p) => p.sku === initialData.dermaSku);
         if (match) {
           setSelectedProduct(match);
+          setSupplierSku(match.supplierSku || supplierSkuMap.get(match.sku.trim()) || "");
+          // Auto-fill from previous order
+          const prev = prevOrderMap.get(match.sku.trim());
+          if (prev) {
+            setDistributionNotes(prev.distributionNotes);
+          }
         } else {
+          setSupplierSku("");
           // Create a synthetic selected product for display
           setSelectedProduct({
             name: initialData.productName,
@@ -244,7 +250,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     const prev = prevOrderMap.get(product.sku.trim());
     if (prev) {
       setDistributionNotes(prev.distributionNotes);
-      setPackagingLabels(prev.packagingLabels);
     }
   };
 
@@ -254,7 +259,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     const prev = prevOrderMap.get(selectedProduct.sku.trim());
     if (prev) {
       if (!distributionNotes) setDistributionNotes(prev.distributionNotes);
-      if (!packagingLabels) setPackagingLabels(prev.packagingLabels);
     }
   }, [selectedProduct, prevOrderMap]);
 
