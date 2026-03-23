@@ -720,19 +720,46 @@ function sendDailyOrderEmail(ss, data) {
     }
   }
 
-  // Build data rows — format dates, resolve container names, fill from Products
+  // Build previous-order lookup: dermaSku → most recent order row (for filling empty fields)
+  // Scan ALL orders (not just today's), keep the last (most recent) row per dermaSku
+  var prevOrderLookup = {}; // dermaSku → { headerName: value, ... }
+  if (dermaSkuColIdx !== -1) {
+    for (var po = 1; po < allData.length; po++) {
+      var poSku = allData[po][dermaSkuColIdx].toString().trim();
+      if (!poSku) continue;
+      var poRow = {};
+      for (var ph3 = 0; ph3 < headers.length; ph3++) {
+        var pVal = allData[po][ph3];
+        poRow[headers[ph3]] = (pVal instanceof Date && !isNaN(pVal.getTime()))
+          ? Utilities.formatDate(pVal, "Asia/Jerusalem", "dd/MM/yyyy")
+          : (pVal || "").toString().trim();
+      }
+      // Only update if this row has more non-empty fields (prefer richer data)
+      if (!prevOrderLookup[poSku]) {
+        prevOrderLookup[poSku] = poRow;
+      } else {
+        var existingFilled = 0, newFilled = 0;
+        for (var ek in poRow) { if (poRow[ek]) newFilled++; }
+        for (var ek2 in prevOrderLookup[poSku]) { if (prevOrderLookup[poSku][ek2]) existingFilled++; }
+        if (newFilled > existingFilled) prevOrderLookup[poSku] = poRow;
+      }
+    }
+  }
+
+  // Build data rows — format dates, resolve container names, fill from prev orders & Products
   var excelData = [excelHeaders];
   for (var m = 0; m < matchingRows.length; m++) {
     var orderRow = matchingRows[m];
     var dermaSku = dermaSkuColIdx !== -1 ? orderRow[dermaSkuColIdx].toString().trim() : "";
     var product = productLookup[dermaSku] || {};
+    var prevOrder = prevOrderLookup[dermaSku] || {};
 
     var row = [];
     for (var col = 0; col < excelHeaders.length; col++) {
       var cellVal = "";
       var headerName = excelHeaders[col];
 
-      // Try order sheet first
+      // 1. Try current order row first
       if (colMapping[col] !== -1) {
         var raw = orderRow[colMapping[col]];
         cellVal = (raw instanceof Date && !isNaN(raw.getTime()))
@@ -746,7 +773,17 @@ function sendDailyOrderEmail(ss, data) {
         if (containerName) cellVal = containerName;
       }
 
-      // If empty, try Products sheet (fuzzy header match)
+      // 2. If empty, try previous orders for same dermaSku
+      if (!cellVal.trim() && dermaSku && prevOrder[headerName]) {
+        cellVal = prevOrder[headerName];
+        // Resolve container name if needed
+        if (headerName === "מיכל") {
+          var cn3 = productNameBySku[cellVal.trim()];
+          if (cn3) cellVal = cn3;
+        }
+      }
+
+      // 3. If still empty, try Products sheet
       if (!cellVal.trim() && dermaSku) {
         if (product[headerName]) {
           cellVal = product[headerName];
@@ -759,7 +796,6 @@ function sendDailyOrderEmail(ss, data) {
             }
           }
         }
-        // Also resolve container name for product-sourced מיכל
         if (headerName === "מיכל" && cellVal.trim()) {
           var cn2 = productNameBySku[cellVal.trim()];
           if (cn2) cellVal = cn2;
