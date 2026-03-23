@@ -119,7 +119,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
   const lowStockSuggestions = useMemo(() => {
     if (!products) return [];
     return products.filter((p) => {
-      if (p.manufacturer !== "פאר פארם") return false;
+      if (!p.manufacturer.includes("פאר")) return false;
       if (p.minAmount <= 0) return false;
       if (p.warehouseQty > p.minAmount * 1.1) return false;
       if (openOrderSkus.has(p.sku.trim())) return false;
