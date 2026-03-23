@@ -397,23 +397,39 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         };
       });
 
-    // Build full list with pre-computed linked children for each item
-    const allSkus = new Set([currentSku, ...linkedItems.map((l) => l.sku), ...suggestionItems.map((s) => s.sku)]);
+    // Build full list with pre-computed linked children
+    // Only exclude original + recipe linked SKUs from linked children lookup
+    const coreSkus = new Set([currentSku, ...linkedItems.map((l) => l.sku)]);
     const allItems: ReviewItem[] = [originalItem];
 
-    // Add linked items + their linked children
+    // Add recipe linked items + their linked children
     for (const li of linkedItems) {
       allItems.push(li);
-      const children = buildLinkedChildren(li.sku, allSkus);
-      for (const c of children) { allSkus.add(c.sku); }
+      const children = buildLinkedChildren(li.sku, coreSkus);
+      for (const c of children) { coreSkus.add(c.sku); }
       allItems.push(...children);
     }
 
-    // Add suggestion items + their linked children
+    // For each suggestion, find linked children (may include other suggestions)
+    // Track which suggestion SKUs become linked children → remove from standalone list
+    const movedToChild = new Set<string>();
+    const suggestionWithChildren: { suggestion: ReviewItem; children: ReviewItem[] }[] = [];
+
     for (const si of suggestionItems) {
-      allItems.push(si);
-      const children = buildLinkedChildren(si.sku, allSkus);
-      for (const c of children) { allSkus.add(c.sku); }
+      const children = buildLinkedChildren(si.sku, coreSkus);
+      // Mark any child that's also a standalone suggestion
+      for (const c of children) {
+        if (suggestionItems.some((s) => s.sku === c.sku)) {
+          movedToChild.add(c.sku);
+        }
+      }
+      suggestionWithChildren.push({ suggestion: si, children });
+    }
+
+    // Add suggestions (skip those moved to be linked children) + their children
+    for (const { suggestion, children } of suggestionWithChildren) {
+      if (movedToChild.has(suggestion.sku)) continue; // skip — appears as linked child
+      allItems.push(suggestion);
       allItems.push(...children);
     }
 
