@@ -556,19 +556,24 @@ export function useLinkedProducts() {
     }
 
     // dermaSku → LinkedProduct[] (other products in same recipe group)
+    // Includes members without dermaSku — uses supplier SKU as identifier
     const linkedProductsMap = new Map<string, LinkedProduct[]>();
     for (const [dsku, groupNum] of skuToGroup) {
       const members = groupMembers.get(groupNum) ?? [];
       if (members.length <= 1) continue;
       const linked: LinkedProduct[] = [];
       for (const member of members) {
-        const memberSku = member.dermaSku?.trim();
-        if (!memberSku || memberSku === dsku) continue;
-        const prod = productMap.get(memberSku);
+        const memberDerma = member.dermaSku?.trim();
+        const memberSupplier = member.supplierSku?.trim();
+        if (memberDerma === dsku) continue; // skip self
+        // Use dermaSku if available, otherwise use supplier SKU prefixed with "S-"
+        const itemSku = memberDerma || (memberSupplier ? `S-${memberSupplier}` : "");
+        if (!itemSku) continue;
+        const prod = memberDerma ? productMap.get(memberDerma) : undefined;
         linked.push({
-          name: prod?.name ?? member.productName ?? memberSku,
-          sku: memberSku,
-          supplierSku: member.supplierSku ?? "",
+          name: prod?.name ?? member.productName ?? itemSku,
+          sku: itemSku,
+          supplierSku: memberSupplier ?? "",
           warehouseQty: prod?.warehouseQty ?? 0,
           minAmount: prod?.minAmount ?? 0,
         });
