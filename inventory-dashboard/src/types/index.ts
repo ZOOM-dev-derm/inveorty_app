@@ -30,6 +30,10 @@ export interface Order {
   comments: string;
   container: string;       // מיכל
   rowIndex: number;        // 1-based row in the sheet (for updates)
+  distributionNotes: string; // חלוקה+הערות
+  packagingLabels: string;   // אריזות ומדבקות
+  formula: string;           // פורמולה
+  content: string;           // תכולה
 }
 
 export interface InventoryOverviewItem {

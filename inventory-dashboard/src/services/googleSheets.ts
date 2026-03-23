@@ -161,6 +161,10 @@ export async function fetchOrders(): Promise<Order[]> {
   const logKey = cols.find((k) => k.trim() === "לוג") ?? cols.find((k) => k.includes("לוג")) ?? "לוג";
   const supplierSkuKey = cols.find((k) => k.includes("פאר") && k.includes("פארם")) ?? cols.find((k) => k.includes("מק") && k.includes("ספק")) ?? "מק\"ט פאר פארם";
   const containerKey = cols.find((k) => k.includes("מיכל")) ?? "מיכל";
+  const distributionKey = cols.find((k) => k.includes("חלוקה")) ?? "חלוקה+הערות";
+  const packagingKey = cols.find((k) => k.includes("אריזות") && k.includes("מדבקות")) ?? "אריזות ומדבקות";
+  const formulaKey = cols.find((k) => k.includes("פורמולה")) ?? "פורמולה";
+  const contentKey = cols.find((k) => k.includes("תכולה")) ?? "תכולה";
 
   console.debug("[fetchOrders] detected columns:", { dermaSkuKey, qtyKey, receivedKey, expectedKey, logKey, supplierSkuKey, containerKey });
 
@@ -191,6 +195,10 @@ export async function fetchOrders(): Promise<Order[]> {
         comments: row[logKey]?.trim() ?? "",
         container: row[containerKey]?.trim() ?? "",
         rowIndex: item.originalIndex, // Use the captured original index
+        distributionNotes: row[distributionKey]?.trim() ?? "",
+        packagingLabels: row[packagingKey]?.trim() ?? "",
+        formula: row[formulaKey]?.trim() ?? "",
+        content: row[contentKey]?.trim() ?? "",
       };
     });
 }
@@ -231,6 +239,10 @@ export async function addOrder(data: {
   expectedDate: string;
   log?: string;
   container?: string;
+  distributionNotes?: string;
+  packagingLabels?: string;
+  formula?: string;
+  content?: string;
 }) {
   return postToSheet("addOrder", data);
 }

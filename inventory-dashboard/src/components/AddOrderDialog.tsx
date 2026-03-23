@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useAddOrder, useProducts, useLinkedProducts, useOpenOrders } from "@/hooks/useSheetData";
+import { useAddOrder, useProducts, useLinkedProducts, useOpenOrders, useOrders } from "@/hooks/useSheetData";
 import { useQueryClient } from "@tanstack/react-query";
 import { addOrder, sendDailyOrderEmail } from "@/services/googleSheets";
 import {
@@ -47,6 +47,10 @@ interface ReviewItem {
   isOriginal: boolean;
   isSuggestion?: boolean;
   container?: string;
+  distributionNotes?: string;
+  packagingLabels?: string;
+  formula?: string;
+  content?: string;
 }
 
 interface SubmissionStatus {
@@ -69,6 +73,8 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
   const [productName, setProductName] = useState("");
   const [expectedDate, setExpectedDate] = useState("");
   const [log, setLog] = useState("");
+  const [distributionNotes, setDistributionNotes] = useState("");
+  const [packagingLabels, setPackagingLabels] = useState("");
 
   // Product selector state
   const [searchQuery, setSearchQuery] = useState("");
@@ -83,6 +89,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
   const mutation = useAddOrder();
   const { linkedProductsMap, supplierSkuMap } = useLinkedProducts();
   const { data: openOrders } = useOpenOrders();
+  const { data: allOrders } = useOrders();
   const queryClient = useQueryClient();
 
   // Three-phase dialog state
@@ -103,6 +110,30 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     }
     return map;
   }, [products]);
+
+  // Build previous order lookup: dermaSku → most recent order with richest data
+  const prevOrderMap = useMemo(() => {
+    const map = new Map<string, { distributionNotes: string; packagingLabels: string; formula: string; content: string; container: string }>();
+    if (allOrders) {
+      for (const o of allOrders) {
+        if (!o.dermaSku) continue;
+        const sku = o.dermaSku.trim();
+        const existing = map.get(sku);
+        const filledCount = [o.distributionNotes, o.packagingLabels, o.formula, o.content].filter(Boolean).length;
+        const existingCount = existing ? [existing.distributionNotes, existing.packagingLabels, existing.formula, existing.content].filter(Boolean).length : 0;
+        if (!existing || filledCount > existingCount) {
+          map.set(sku, {
+            distributionNotes: o.distributionNotes || "",
+            packagingLabels: o.packagingLabels || "",
+            formula: o.formula || "",
+            content: o.content || "",
+            container: o.container || "",
+          });
+        }
+      }
+    }
+    return map;
+  }, [allOrders]);
 
   // Build set of SKUs that already have open orders
   const openOrderSkus = useMemo(() => {
@@ -208,6 +239,13 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     if (minAmt && !quantity) {
       setQuantity(String(minAmt));
     }
+
+    // Auto-fill from previous order
+    const prev = prevOrderMap.get(product.sku.trim());
+    if (prev) {
+      setDistributionNotes(prev.distributionNotes);
+      setPackagingLabels(prev.packagingLabels);
+    }
   };
 
   const handleClearProduct = () => {
@@ -230,6 +268,8 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setProductName("");
     setExpectedDate("");
     setLog("");
+    setDistributionNotes("");
+    setPackagingLabels("");
     setSearchQuery("");
     setSelectedProduct(null);
     setContextStock(undefined);
@@ -254,6 +294,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       for (const p of products) productLookup.set(p.sku.trim(), p);
     }
 
+    const prevOrig = prevOrderMap.get(currentSku);
     const originalItem: ReviewItem = {
       name: productName.trim(),
       sku: currentSku,
@@ -264,37 +305,55 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       checked: true,
       isOriginal: true,
       container: selectedProduct?.container || productLookup.get(currentSku)?.container || "",
+      distributionNotes: distributionNotes.trim(),
+      packagingLabels: packagingLabels.trim(),
+      formula: prevOrig?.formula || "",
+      content: prevOrig?.content || "",
     };
 
     // Linked products from recipe groups
-    const linkedItems: ReviewItem[] = (linked ?? []).map((item) => ({
-      name: item.name,
-      sku: item.sku,
-      supplierSku: item.supplierSku || supplierSkuMap.get(item.sku) || "",
-      warehouseQty: item.warehouseQty,
-      minAmount: item.minAmount,
-      quantity: String(item.minAmount || ""),
-      checked: true,
-      isOriginal: false,
-      container: productLookup.get(item.sku.trim())?.container || "",
-    }));
+    const linkedItems: ReviewItem[] = (linked ?? []).map((item) => {
+      const prev = prevOrderMap.get(item.sku.trim());
+      return {
+        name: item.name,
+        sku: item.sku,
+        supplierSku: item.supplierSku || supplierSkuMap.get(item.sku) || "",
+        warehouseQty: item.warehouseQty,
+        minAmount: item.minAmount,
+        quantity: String(item.minAmount || ""),
+        checked: true,
+        isOriginal: false,
+        container: productLookup.get(item.sku.trim())?.container || "",
+        distributionNotes: prev?.distributionNotes || "",
+        packagingLabels: prev?.packagingLabels || "",
+        formula: prev?.formula || "",
+        content: prev?.content || "",
+      };
+    });
 
     // Low-stock suggestions (exclude original and linked SKUs)
     const excludeSkus = new Set([currentSku, ...linkedItems.map((l) => l.sku)]);
     const suggestionItems: ReviewItem[] = lowStockSuggestions
       .filter((p) => !excludeSkus.has(p.sku.trim()))
-      .map((p) => ({
-        name: p.name,
-        sku: p.sku,
-        supplierSku: p.supplierSku || supplierSkuMap.get(p.sku.trim()) || "",
-        warehouseQty: p.warehouseQty,
-        minAmount: p.minAmount,
-        quantity: String(p.minAmount || ""),
-        checked: false,
-        isOriginal: false,
-        isSuggestion: true,
-        container: p.container || "",
-      }));
+      .map((p) => {
+        const prev = prevOrderMap.get(p.sku.trim());
+        return {
+          name: p.name,
+          sku: p.sku,
+          supplierSku: p.supplierSku || supplierSkuMap.get(p.sku.trim()) || "",
+          warehouseQty: p.warehouseQty,
+          minAmount: p.minAmount,
+          quantity: String(p.minAmount || ""),
+          checked: false,
+          isOriginal: false,
+          isSuggestion: true,
+          container: p.container || "",
+          distributionNotes: prev?.distributionNotes || "",
+          packagingLabels: prev?.packagingLabels || "",
+          formula: prev?.formula || "",
+          content: prev?.content || "",
+        };
+      });
 
     setReviewItems([originalItem, ...linkedItems, ...suggestionItems]);
     setDialogPhase("review");
@@ -328,6 +387,10 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
           expectedDate: expectedDate.trim(),
           log: item.isOriginal ? (log.trim() || undefined) : undefined,
           container: item.container || undefined,
+          distributionNotes: item.distributionNotes || undefined,
+          packagingLabels: item.packagingLabels || undefined,
+          formula: item.formula || undefined,
+          content: item.content || undefined,
         });
         setSubmissionStatuses((prev) =>
           prev.map((s) => s.sku === item.sku ? { ...s, status: "success" } : s)
@@ -372,6 +435,10 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         expectedDate: expectedDate.trim(),
         log: item.isOriginal ? (log.trim() || undefined) : undefined,
         container: item.container || undefined,
+        distributionNotes: item.distributionNotes || undefined,
+        packagingLabels: item.packagingLabels || undefined,
+        formula: item.formula || undefined,
+        content: item.content || undefined,
       });
       setSubmissionStatuses((prev) =>
         prev.map((s) => s.sku === sku ? { ...s, status: "success" } : s)
@@ -540,6 +607,24 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                     required
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="distribution-notes">חלוקה+הערות</Label>
+                <Input
+                  id="distribution-notes"
+                  value={distributionNotes}
+                  onChange={(e) => setDistributionNotes(e.target.value)}
+                  placeholder="חלוקה והערות..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="packaging-labels">אריזות ומדבקות</Label>
+                <Input
+                  id="packaging-labels"
+                  value={packagingLabels}
+                  onChange={(e) => setPackagingLabels(e.target.value)}
+                  placeholder="אריזות ומדבקות..."
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="order-log">לוג</Label>

@@ -109,6 +109,10 @@ function addOrder(ss, data) {
     "תאריך צפי": data.expectedDate || "",
     "לוג": data.log || "",
     "מיכל": data.container || "",
+    "חלוקה+הערות": data.distributionNotes || "",
+    "אריזות ומדבקות": data.packagingLabels || "",
+    "פורמולה": data.formula || "",
+    "תכולה": data.content || "",
   };
 
   // Build row array matching header positions
@@ -672,8 +676,8 @@ function sendDailyOrderEmail(ss, data) {
   // Excel column order as specified
   var excelHeaders = [
     "תאריך הזמנה", "מק\"ט פאר-פארם", "כמות סה\"כ", "מיכל", "תכולה",
-    "שם פריט", "פורמולה", "קוד דרמה", "חלוקה+הערות", "ייצור איתי",
-    "אריזות ומדבקות", "בקבוקים", "התקבל", "תאריך צפי", "לוג"
+    "שם פריט", "פורמולה", "קוד דרמה", "חלוקה+הערות",
+    "אריזות ומדבקות", "בקבוקים", "לוג"
   ];
 
   // Map each excel header to the Orders sheet column index (fuzzy match)
@@ -771,6 +775,11 @@ function sendDailyOrderEmail(ss, data) {
       if (headerName === "מיכל" && cellVal.trim()) {
         var containerName = productNameBySku[cellVal.trim()];
         if (containerName) cellVal = containerName;
+      }
+
+      // For שם פריט: prefer the Peer Pharm name from previous orders
+      if (headerName === "שם פריט" && prevOrder["שם פריט"]) {
+        cellVal = prevOrder["שם פריט"];
       }
 
       // 2. If empty, try previous orders for same dermaSku
