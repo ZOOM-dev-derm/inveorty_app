@@ -3,8 +3,15 @@ import { Layout } from "@/components/layout/Layout";
 import { ProductsPage } from "@/pages/ProductsPage";
 import { OrdersPage } from "@/pages/OrdersPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { LoginPage } from "@/components/LoginPage";
 
-function App() {
+function AuthGate() {
+  const { user, loading } = useAuth();
+
+  if (loading) return null;
+  if (!user) return <LoginPage />;
+
   return (
     <Routes>
       <Route element={<Layout />}>
@@ -14,6 +21,14 @@ function App() {
         <Route path="*" element={<Navigate to="/products" replace />} />
       </Route>
     </Routes>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   );
 }
 

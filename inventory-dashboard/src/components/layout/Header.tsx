@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Menu, Loader2 } from "lucide-react";
+import { RefreshCw, Menu, Loader2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddProductDialog } from "@/components/AddProductDialog";
 import { AddOrderDialog } from "@/components/AddOrderDialog";
 import { useSyncMissingProducts, useSyncSupplierSkus } from "@/hooks/useSheetData";
+import { useAuth } from "@/contexts/AuthContext";
 import { SideNav } from "./SideNav";
 import logoSrc from "@/assets/logo.png";
 
@@ -14,6 +15,7 @@ export function Header() {
   const [navOpen, setNavOpen] = useState(false);
   const syncMutation = useSyncMissingProducts();
   const syncSkusMutation = useSyncSupplierSkus();
+  const { user, logout } = useAuth();
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -69,6 +71,17 @@ export function Header() {
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             </Button>
+            {user && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={logout}
+                title={`התנתק (${user.email})`}
+                className="h-8 w-8"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
       </header>
