@@ -535,13 +535,17 @@ export function useLinkedProducts() {
     if (connectedProducts) {
       for (const cp of connectedProducts) {
         const dsku = cp.dermaSku?.trim();
+        // Add ALL members to group (even without dermaSku)
+        if (cp.groupNumber) {
+          const members = groupMembers.get(cp.groupNumber) ?? [];
+          members.push(cp);
+          groupMembers.set(cp.groupNumber, members);
+        }
+        // Only map dermaSku → group when dermaSku exists
         if (dsku) {
           if (cp.supplierSku) supplierSkuMap.set(dsku, cp.supplierSku);
           if (cp.groupNumber) {
             skuToGroup.set(dsku, cp.groupNumber);
-            const members = groupMembers.get(cp.groupNumber) ?? [];
-            members.push(cp);
-            groupMembers.set(cp.groupNumber, members);
           }
         }
       }
