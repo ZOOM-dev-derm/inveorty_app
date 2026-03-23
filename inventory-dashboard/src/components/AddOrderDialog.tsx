@@ -474,7 +474,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       const item = prev[idx];
       let updated = prev.map((r, i) => i === idx ? { ...r, checked } : r);
 
-      if (checked && item.isSuggestion) {
+      if (checked && !item.isOriginal) {
         // Add linked products if they exist
         const linked = linkedProductsMap.get(item.sku.trim());
         if (linked && linked.length > 0) {
@@ -504,7 +504,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
             updated = [...updated.slice(0, idx + 1), ...newLinked, ...updated.slice(idx + 1)];
           }
         }
-      } else if (!checked && item.isSuggestion) {
+      } else if (!checked && !item.isOriginal) {
         // Remove linked sub-items of this parent
         updated = updated.filter((r) => r.parentSku !== item.sku);
       }
@@ -751,7 +751,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                           checked={item.checked}
                           disabled={item.isOriginal}
                           onChange={(e) => {
-                            if (item.isSuggestion && !item.parentSku) {
+                            if (!item.isOriginal && !item.parentSku) {
                               handleSuggestionCheck(idx, e.target.checked);
                             } else {
                               setReviewItems((prev) =>
@@ -789,8 +789,8 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                           className="w-20 h-8 text-sm text-center shrink-0"
                         />
                       </div>
-                      {/* Expanded details when suggestion is checked */}
-                      {item.isSuggestion && item.checked && !isLinkedChild && (
+                      {/* Expanded details when non-original item is checked */}
+                      {!item.isOriginal && item.checked && !isLinkedChild && (
                         <div className="mt-1 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-2 space-y-2">
                           <div className="grid grid-cols-2 gap-2">
                             <div>
