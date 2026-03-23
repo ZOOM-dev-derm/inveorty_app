@@ -698,7 +698,29 @@ function sendDailyOrderEmail(ss, data) {
     if (headers[di].indexOf("קוד") !== -1 && headers[di].indexOf("דרמה") !== -1) { dermaSkuColIdx = di; break; }
   }
 
-  // Build data rows — format dates and fill from Products when order cell is empty
+  // Build SKU → product name map for container name resolution
+  // (מיכל column stores a container product SKU like 994644, we want its name)
+  var productNameBySku = {};
+  if (productsSheet) {
+    var prodNameCol = -1;
+    var prodData2 = productsSheet.getDataRange().getValues();
+    var prodHeaders2 = prodData2[0];
+    var prodSkuCol2 = -1;
+    for (var pn = 0; pn < prodHeaders2.length; pn++) {
+      var ph2 = prodHeaders2[pn].toString().trim();
+      if (ph2 === "פריט") prodSkuCol2 = pn;
+      if (ph2 === "שם פריט" || (ph2.indexOf("שם") !== -1 && ph2.indexOf("פריט") !== -1)) prodNameCol = pn;
+    }
+    if (prodSkuCol2 !== -1 && prodNameCol !== -1) {
+      for (var pnr = 1; pnr < prodData2.length; pnr++) {
+        var pnSku = prodData2[pnr][prodSkuCol2].toString().trim();
+        var pnName = prodData2[pnr][prodNameCol].toString().trim();
+        if (pnSku && pnName) productNameBySku[pnSku] = pnName;
+      }
+    }
+  }
+
+  // Build data rows — format dates, resolve container names, fill from Products
   var excelData = [excelHeaders];
   for (var m = 0; m < matchingRows.length; m++) {
     var orderRow = matchingRows[m];
@@ -708,6 +730,8 @@ function sendDailyOrderEmail(ss, data) {
     var row = [];
     for (var col = 0; col < excelHeaders.length; col++) {
       var cellVal = "";
+      var headerName = excelHeaders[col];
+
       // Try order sheet first
       if (colMapping[col] !== -1) {
         var raw = orderRow[colMapping[col]];
@@ -715,23 +739,33 @@ function sendDailyOrderEmail(ss, data) {
           ? Utilities.formatDate(raw, "Asia/Jerusalem", "dd/MM/yyyy")
           : (raw || "").toString();
       }
+
+      // For מיכל: resolve SKU code to product name
+      if (headerName === "מיכל" && cellVal.trim()) {
+        var containerName = productNameBySku[cellVal.trim()];
+        if (containerName) cellVal = containerName;
+      }
+
       // If empty, try Products sheet (fuzzy header match)
       if (!cellVal.trim() && dermaSku) {
-        var headerTarget = excelHeaders[col];
-        // Try exact match in product
-        if (product[headerTarget]) {
-          cellVal = product[headerTarget];
+        if (product[headerName]) {
+          cellVal = product[headerName];
         } else {
-          // Fuzzy match against product headers
           for (var pk in product) {
             if (product.hasOwnProperty(pk) && product[pk] &&
-                (pk.indexOf(headerTarget) !== -1 || headerTarget.indexOf(pk) !== -1)) {
+                (pk.indexOf(headerName) !== -1 || headerName.indexOf(pk) !== -1)) {
               cellVal = product[pk];
               break;
             }
           }
         }
+        // Also resolve container name for product-sourced מיכל
+        if (headerName === "מיכל" && cellVal.trim()) {
+          var cn2 = productNameBySku[cellVal.trim()];
+          if (cn2) cellVal = cn2;
+        }
       }
+
       row.push(cellVal);
     }
     excelData.push(row);
