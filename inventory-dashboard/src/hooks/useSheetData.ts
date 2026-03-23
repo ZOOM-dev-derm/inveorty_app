@@ -576,6 +576,40 @@ export function useLinkedProducts() {
       if (linked.length > 0) linkedProductsMap.set(dsku, linked);
     }
 
+    // Fallback: for Peer Pharm products without linked products,
+    // find "פרי" variant by SKU pattern (SKU + last digit = פרי SKU)
+    // e.g., 4637 + "7" = 46377, 4641 + "1" = 46411
+    if (products) {
+      for (const p of products) {
+        if (!p.manufacturer.includes("פאר")) continue;
+        const sku = p.sku.trim();
+        if (!sku || sku.length < 4) continue;
+
+        // Check both directions: base → פרי, and פרי → base
+        const friSku = sku + sku[sku.length - 1]; // 4637 → 46377
+        const baseSku = sku.slice(0, -1); // 46377 → 4637 (if this is a פרי)
+
+        for (const variantSku of [friSku, baseSku]) {
+          const variant = productMap.get(variantSku);
+          if (!variant || variantSku === sku) continue;
+          if (!variant.manufacturer.includes("פאר")) continue;
+
+          // Add if not already linked
+          const existing = linkedProductsMap.get(sku) ?? [];
+          if (!existing.some((l) => l.sku === variantSku)) {
+            existing.push({
+              name: variant.name,
+              sku: variantSku,
+              supplierSku: variant.supplierSku ?? "",
+              warehouseQty: variant.warehouseQty,
+              minAmount: variant.minAmount,
+            });
+            linkedProductsMap.set(sku, existing);
+          }
+        }
+      }
+    }
+
     return { supplierSkuMap, linkedProductsMap };
   }, [connectedProducts, products]);
 }
