@@ -100,6 +100,8 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [showEmailConfirm, setShowEmailConfirm] = useState(false);
   const [emailMessage, setEmailMessage] = useState("");
+  const emailConfirmRef = useRef<HTMLDivElement>(null);
+
   const [emailOrderRows, setEmailOrderRows] = useState<{
     name: string; sku: string; supplierSku: string; quantity: string;
     container: string; distributionNotes: string; formula: string; content: string;
@@ -512,6 +514,10 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         }))
       );
       setShowEmailConfirm(true);
+      // Scroll email confirmation into view after render
+      setTimeout(() => {
+        emailConfirmRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
     }
   };
 
@@ -956,7 +962,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
 
             {/* Email confirmation dialog */}
             {showEmailConfirm && (
-              <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+              <div ref={emailConfirmRef} className="border-2 border-primary/40 rounded-lg p-4 space-y-3 bg-primary/5">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Mail className="h-4 w-4 text-primary" />
                   שליחת מייל הזמנה לספק
