@@ -651,7 +651,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       <DialogTrigger asChild>
         {trigger ?? defaultTrigger}
       </DialogTrigger>
-      <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-[95vw]">
+      <DialogContent dir="rtl" className={`max-h-[90vh] overflow-y-auto ${dialogPhase === "email" ? "sm:max-w-[90vw]" : "sm:max-w-lg"}`}>
         <DialogHeader>
           <DialogTitle>
             {dialogPhase === "form" && "הוספת הזמנה חדשה"}
