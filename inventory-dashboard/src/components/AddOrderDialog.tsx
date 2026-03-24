@@ -94,13 +94,11 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
   const queryClient = useQueryClient();
 
   // Three-phase dialog state
-  const [dialogPhase, setDialogPhase] = useState<"form" | "review" | "submitting">("form");
+  const [dialogPhase, setDialogPhase] = useState<"form" | "review" | "email" | "submitting">("form");
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [submissionStatuses, setSubmissionStatuses] = useState<SubmissionStatus[]>([]);
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
-  const [showEmailConfirm, setShowEmailConfirm] = useState(false);
   const [emailMessage, setEmailMessage] = useState("");
-  const emailConfirmRef = useRef<HTMLDivElement>(null);
 
   const [emailOrderRows, setEmailOrderRows] = useState<{
     name: string; sku: string; supplierSku: string; quantity: string;
@@ -301,7 +299,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setReviewItems([]);
     setSubmissionStatuses([]);
     setEmailStatus("idle");
-    setShowEmailConfirm(false);
     setEmailMessage("");
     setEmailOrderRows([]);
   };
@@ -448,7 +445,46 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setDialogPhase("review");
   };
 
-  const handleConfirmBatch = async () => {
+  const handleConfirmBatch = () => {
+    const checkedItems = reviewItems.filter((item) => item.checked);
+    if (checkedItems.length === 0) return;
+
+    // Build email preview BEFORE submitting — orders go to DB only after email is confirmed
+    setEmailMessage("שלום רב,\nמצורפת טבלת הזמנות.\nנא לאשר קבלת ההזמנה.");
+
+    // Resolve container SKU to product name
+    const skuToName = new Map<string, string>();
+    if (products) {
+      for (const p of products) {
+        if (p.sku && p.name) skuToName.set(p.sku.trim(), p.name);
+      }
+    }
+
+    function resolveContainer(raw: string): string {
+      if (!raw) return "";
+      // Handle comma-separated values (e.g., "994644,994646")
+      return raw.split(",").map((part) => {
+        const trimmed = part.trim();
+        return skuToName.get(trimmed) || trimmed;
+      }).join(", ");
+    }
+
+    setEmailOrderRows(
+      checkedItems.map((item) => ({
+        name: item.name,
+        sku: item.sku,
+        supplierSku: item.supplierSku,
+        quantity: item.quantity,
+        container: resolveContainer(item.container || ""),
+        distributionNotes: item.distributionNotes || "",
+        formula: item.formula || "",
+        content: item.content || "",
+      }))
+    );
+    setDialogPhase("email");
+  };
+
+  const handleSendEmailAndSubmit = async () => {
     const checkedItems = reviewItems.filter((item) => item.checked);
     if (checkedItems.length === 0) return;
 
@@ -459,6 +495,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     }));
     setSubmissionStatuses(initialStatuses);
 
+    // 1. Submit all orders to sheet
     let hasAnySuccess = false;
     for (let i = 0; i < checkedItems.length; i++) {
       const item = checkedItems[i];
@@ -494,57 +531,66 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
 
     queryClient.invalidateQueries({ queryKey: ["orders"] });
 
-    // Show email confirmation dialog if at least one order succeeded
+    // 2. Send email
     if (hasAnySuccess) {
-      setEmailMessage("שלום רב,\nמצורפת טבלת הזמנות.\nנא לאשר קבלת ההזמנה.");
-      // Build editable order rows for the email preview
-      const successItems = checkedItems.filter((_, idx) =>
-        initialStatuses[idx]?.status !== "error"
-      );
-      // Resolve container SKU to product name
-      const skuToName = new Map<string, string>();
-      if (products) {
-        for (const p of products) {
-          if (p.sku && p.name) skuToName.set(p.sku.trim(), p.name);
-        }
+      try {
+        setEmailStatus("sending");
+        await sendDailyOrderEmail(
+          orderDate.trim(),
+          emailMessage.trim() || undefined,
+          emailOrderRows.length > 0 ? emailOrderRows : undefined
+        );
+        setEmailStatus("sent");
+      } catch {
+        setEmailStatus("error");
       }
-      setEmailOrderRows(
-        successItems.map((item) => ({
-          name: item.name,
-          sku: item.sku,
+    }
+  };
+
+  const handleSkipEmail = async () => {
+    // Submit orders without sending email
+    const checkedItems = reviewItems.filter((item) => item.checked);
+    if (checkedItems.length === 0) return;
+
+    setDialogPhase("submitting");
+    const initialStatuses: SubmissionStatus[] = checkedItems.map((item) => ({
+      sku: item.sku,
+      status: "pending",
+    }));
+    setSubmissionStatuses(initialStatuses);
+
+    for (let i = 0; i < checkedItems.length; i++) {
+      const item = checkedItems[i];
+      setSubmissionStatuses((prev) =>
+        prev.map((s) => s.sku === item.sku ? { ...s, status: "submitting" } : s)
+      );
+
+      try {
+        await addOrder({
+          orderDate: orderDate.trim(),
           supplierSku: item.supplierSku,
+          dermaSku: item.sku,
           quantity: item.quantity,
-          container: skuToName.get((item.container || "").trim()) || item.container || "",
-          distributionNotes: item.distributionNotes || "",
-          formula: item.formula || "",
-          content: item.content || "",
-        }))
-      );
-      setShowEmailConfirm(true);
-      // Scroll email confirmation into view after render
-      setTimeout(() => {
-        emailConfirmRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 100);
+          productName: item.name,
+          expectedDate: expectedDate.trim(),
+          log: item.isOriginal ? (log.trim() || undefined) : undefined,
+          container: item.container || undefined,
+          distributionNotes: item.distributionNotes || undefined,
+          packagingLabels: item.packagingLabels || undefined,
+          formula: item.formula || undefined,
+          content: item.content || undefined,
+        });
+        setSubmissionStatuses((prev) =>
+          prev.map((s) => s.sku === item.sku ? { ...s, status: "success" } : s)
+        );
+      } catch (err) {
+        setSubmissionStatuses((prev) =>
+          prev.map((s) => s.sku === item.sku ? { ...s, status: "error", error: (err as Error).message } : s)
+        );
+      }
     }
-  };
 
-  const handleSendEmail = async () => {
-    try {
-      setShowEmailConfirm(false);
-      setEmailStatus("sending");
-      await sendDailyOrderEmail(
-        orderDate.trim(),
-        emailMessage.trim() || undefined,
-        emailOrderRows.length > 0 ? emailOrderRows : undefined
-      );
-      setEmailStatus("sent");
-    } catch {
-      setEmailStatus("error");
-    }
-  };
-
-  const handleSkipEmail = () => {
-    setShowEmailConfirm(false);
+    queryClient.invalidateQueries({ queryKey: ["orders"] });
   };
 
   const handleRetry = async (sku: string) => {
@@ -605,7 +651,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       <DialogTrigger asChild>
         {trigger ?? defaultTrigger}
       </DialogTrigger>
-      <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {dialogPhase === "form" && "הוספת הזמנה חדשה"}
@@ -929,7 +975,85 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
           </div>
         )}
 
-        {/* Phase 3: Submitting */}
+        {/* Phase 3: Email confirmation */}
+        {dialogPhase === "email" && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-base font-bold">
+              <Mail className="h-5 w-5 text-primary" />
+              שליחת מייל הזמנה לספק
+            </div>
+
+            {/* Editable message */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">הודעה לספק:</label>
+              <textarea
+                value={emailMessage}
+                onChange={(e) => setEmailMessage(e.target.value)}
+                className="w-full min-h-[60px] text-sm border border-border rounded-lg px-3 py-2 bg-background resize-y"
+                dir="rtl"
+              />
+            </div>
+
+            {/* Editable order rows table */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">טבלת הזמנות (Excel):</label>
+              <div className="overflow-x-auto border border-border rounded-lg bg-background">
+                <table className="w-full text-xs" dir="rtl">
+                  <thead>
+                    <tr className="bg-muted/50 border-b border-border">
+                      <th className="px-2 py-1.5 text-right font-medium min-w-[140px]">שם פריט</th>
+                      <th className="px-2 py-1.5 text-right font-medium">מק״ט ספק</th>
+                      <th className="px-2 py-1.5 text-right font-medium w-16">כמות</th>
+                      <th className="px-2 py-1.5 text-right font-medium">מיכל</th>
+                      <th className="px-2 py-1.5 text-right font-medium">פורמולה</th>
+                      <th className="px-2 py-1.5 text-right font-medium">תכולה</th>
+                      <th className="px-2 py-1.5 text-right font-medium">חלוקה+הערות</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {emailOrderRows.map((row, idx) => (
+                      <tr key={idx} className="border-b border-border/30 last:border-0">
+                        <td className="px-1 py-1">
+                          <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.name} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], name: e.target.value }; setEmailOrderRows(rows); }} />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.supplierSku} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], supplierSku: e.target.value }; setEmailOrderRows(rows); }} />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input className="w-16 text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.quantity} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], quantity: e.target.value }; setEmailOrderRows(rows); }} />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.container} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], container: e.target.value }; setEmailOrderRows(rows); }} />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.formula} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], formula: e.target.value }; setEmailOrderRows(rows); }} />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.content} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], content: e.target.value }; setEmailOrderRows(rows); }} />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.distributionNotes} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], distributionNotes: e.target.value }; setEmailOrderRows(rows); }} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button className="flex-1" onClick={handleSendEmailAndSubmit}>
+                <Mail className="h-4 w-4 ml-2" />
+                אשר הזמנה ושלח מייל
+              </Button>
+              <Button variant="outline" onClick={handleSkipEmail}>
+                אשר בלי מייל
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Phase 4: Submitting */}
         {dialogPhase === "submitting" && (
           <div className="space-y-4">
             <div className="space-y-2">
@@ -967,84 +1091,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
               })}
             </div>
 
-            {/* Email confirmation dialog */}
-            {showEmailConfirm && (
-              <div ref={emailConfirmRef} className="border-2 border-primary/40 rounded-lg p-4 space-y-3 bg-primary/5">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Mail className="h-4 w-4 text-primary" />
-                  שליחת מייל הזמנה לספק
-                </div>
-
-                {/* Editable message */}
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">הודעה לספק:</label>
-                  <textarea
-                    value={emailMessage}
-                    onChange={(e) => setEmailMessage(e.target.value)}
-                    className="w-full min-h-[60px] text-sm border border-border rounded-lg px-3 py-2 bg-background resize-y"
-                    dir="rtl"
-                  />
-                </div>
-
-                {/* Editable order rows table */}
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">טבלת הזמנות (Excel):</label>
-                  <div className="overflow-x-auto border border-border rounded-lg bg-background">
-                    <table className="w-full min-w-[700px] text-xs" dir="rtl">
-                      <thead>
-                        <tr className="bg-muted/50 border-b border-border">
-                          <th className="px-2 py-1.5 text-right font-medium min-w-[140px]">שם פריט</th>
-                          <th className="px-2 py-1.5 text-right font-medium">מק״ט ספק</th>
-                          <th className="px-2 py-1.5 text-right font-medium w-16">כמות</th>
-                          <th className="px-2 py-1.5 text-right font-medium">מיכל</th>
-                          <th className="px-2 py-1.5 text-right font-medium">פורמולה</th>
-                          <th className="px-2 py-1.5 text-right font-medium">תכולה</th>
-                          <th className="px-2 py-1.5 text-right font-medium">חלוקה+הערות</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {emailOrderRows.map((row, idx) => (
-                          <tr key={idx} className="border-b border-border/30 last:border-0">
-                            <td className="px-1 py-1">
-                              <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.name} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], name: e.target.value }; setEmailOrderRows(rows); }} />
-                            </td>
-                            <td className="px-1 py-1">
-                              <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.supplierSku} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], supplierSku: e.target.value }; setEmailOrderRows(rows); }} />
-                            </td>
-                            <td className="px-1 py-1">
-                              <input className="w-16 text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.quantity} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], quantity: e.target.value }; setEmailOrderRows(rows); }} />
-                            </td>
-                            <td className="px-1 py-1">
-                              <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.container} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], container: e.target.value }; setEmailOrderRows(rows); }} />
-                            </td>
-                            <td className="px-1 py-1">
-                              <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.formula} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], formula: e.target.value }; setEmailOrderRows(rows); }} />
-                            </td>
-                            <td className="px-1 py-1">
-                              <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.content} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], content: e.target.value }; setEmailOrderRows(rows); }} />
-                            </td>
-                            <td className="px-1 py-1">
-                              <input className="w-full text-xs bg-transparent border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 outline-none" value={row.distributionNotes} onChange={(e) => { const rows = [...emailOrderRows]; rows[idx] = { ...rows[idx], distributionNotes: e.target.value }; setEmailOrderRows(rows); }} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button className="flex-1" onClick={handleSendEmail}>
-                    <Mail className="h-4 w-4 ml-2" />
-                    שלח מייל
-                  </Button>
-                  <Button variant="outline" onClick={handleSkipEmail}>
-                    דלג
-                  </Button>
-                </div>
-              </div>
-            )}
-
             {/* Email status */}
             {emailStatus !== "idle" && (
               <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
@@ -1063,7 +1109,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
               </div>
             )}
 
-            {allResolved && !showEmailConfirm && emailStatus !== "sending" && (
+            {allResolved && emailStatus !== "sending" && (
               <Button
                 className="w-full"
                 onClick={() => {
