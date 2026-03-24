@@ -364,10 +364,27 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1 block">תאריך צפי</label>
                   <input
-                    type="text"
-                    value={editExpectedDate}
-                    onChange={(e) => setEditExpectedDate(e.target.value)}
-                    placeholder="DD/MM/YYYY"
+                    type="date"
+                    value={(() => {
+                      // Convert DD/MM/YYYY to YYYY-MM-DD for input[type=date]
+                      const parts = editExpectedDate.split(/[\/.\-]/);
+                      if (parts.length === 3) {
+                        const [d, m, y] = parts;
+                        const year = y.length === 2 ? "20" + y : y;
+                        return `${year}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+                      }
+                      return editExpectedDate;
+                    })()}
+                    onChange={(e) => {
+                      // Convert YYYY-MM-DD back to DD/MM/YYYY
+                      const val = e.target.value;
+                      if (val) {
+                        const [y, m, d] = val.split("-");
+                        setEditExpectedDate(`${d}/${m}/${y}`);
+                      } else {
+                        setEditExpectedDate("");
+                      }
+                    }}
                     className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
                   />
                 </div>
