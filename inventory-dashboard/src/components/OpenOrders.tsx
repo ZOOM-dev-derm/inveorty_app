@@ -1,4 +1,4 @@
-import { useOpenOrders, useProducts, useUpdateOrderStatus, useUpdateOrderComments, useSendFollowUp } from "@/hooks/useSheetData";
+import { useOrders, useProducts, useUpdateOrderStatus, useUpdateOrderComments, useSendFollowUp } from "@/hooks/useSheetData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -91,6 +91,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
   const [followUpMessage, setFollowUpMessage] = useState("");
   const { date: expectedDate, estimated } = getExpectedDate(order);
   const overdue = isOverdue(order);
+  const received = isReceived(order);
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState("");
 
@@ -118,7 +119,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
 
   return (
     <div
-      className="order-detail py-3 border-b border-border/20 last:border-0"
+      className={`order-detail py-3 border-b border-border/20 last:border-0 ${received ? "opacity-60" : ""}`}
       style={{
         opacity: expanded ? 1 : 0,
         transform: expanded ? "translateY(0)" : "translateY(8px)",
@@ -175,32 +176,39 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-          {overdue && (
+          {received && (
+            <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-800 border-green-300">
+              התקבל ✓
+            </Badge>
+          )}
+          {overdue && !received && (
             <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
               באיחור
             </Badge>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 px-2 text-[11px] gap-1"
-            disabled={statusMutation.isPending}
-            title="סמן כהתקבל"
-            onClick={(e) => {
-              e.stopPropagation();
-              statusMutation.mutate({
-                rowIndex: order.rowIndex,
-                received: true,
-              });
-            }}
-          >
-            {statusMutation.isPending ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <CheckCircle2 className="h-3 w-3" />
-            )}
-            התקבל
-          </Button>
+          {!received && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px] gap-1"
+              disabled={statusMutation.isPending}
+              title="סמן כהתקבל"
+              onClick={(e) => {
+                e.stopPropagation();
+                statusMutation.mutate({
+                  rowIndex: order.rowIndex,
+                  received: true,
+                });
+              }}
+            >
+              {statusMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3 w-3" />
+              )}
+              התקבל
+            </Button>
+          )}
           <Button
             variant={hasComments ? "default" : "outline"}
             size="sm"
@@ -433,8 +441,19 @@ function OrderGroupCard({ group, mode, skuNameMap }: { group: OrderGroup; mode: 
   );
 }
 
-export function OpenOrders({ search }: { search: string }) {
-  const { data: orders, isLoading, error } = useOpenOrders();
+const RECEIVED_VALUES = ["כן", "v", "✓", "true", "yes"];
+
+function isReceived(order: Order): boolean {
+  return RECEIVED_VALUES.includes((order.received || "").toString().trim().toLowerCase());
+}
+
+export function OpenOrders({ search, showReceived = false }: { search: string; showReceived?: boolean }) {
+  const { data: allOrders, isLoading, error } = useOrders();
+  const orders = useMemo(() => {
+    if (!allOrders) return [];
+    if (showReceived) return allOrders;
+    return allOrders.filter((o) => !isReceived(o));
+  }, [allOrders, showReceived]);
   const { data: products } = useProducts();
   const [groupMode, setGroupMode] = useState<GroupMode>("date");
 
