@@ -54,6 +54,18 @@ function doPost(e) {
       case "sendDailyOrderEmail":
         result = sendDailyOrderEmail(ss, data);
         break;
+      case "updateExpectedDate":
+        result = updateExpectedDate(ss, data);
+        break;
+      case "createSupplierMessagesSheet":
+        result = createSupplierMessagesSheet(ss);
+        break;
+      case "addSupplierMessage":
+        result = addSupplierMessage(ss, data);
+        break;
+      case "linkSupplierMessage":
+        result = linkSupplierMessage(ss, data);
+        break;
       default:
         result = { success: false, error: "Unknown action: " + action };
     }
@@ -259,6 +271,143 @@ function updateOrderComments(ss, data) {
     : newComment;
 
   range.setValue(finalValue);
+  return { success: true };
+}
+
+function updateExpectedDate(ss, data) {
+  var sheet = getSheetByGid(ss, ORDERS_GID);
+  if (!sheet) return { success: false, error: "Orders sheet not found" };
+
+  var rowIndex = data.rowIndex;
+  if (!rowIndex || rowIndex < 2)
+    return { success: false, error: "Invalid row index" };
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var expectedCol = -1;
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i].toString().indexOf("צפי") !== -1) {
+      expectedCol = i + 1;
+      break;
+    }
+  }
+
+  if (expectedCol === -1)
+    return { success: false, error: "Expected date (צפי) column not found" };
+
+  sheet.getRange(rowIndex, expectedCol).setValue(data.expectedDate || "");
+  return { success: true };
+}
+
+// ── Supplier Messages Sheet ──
+
+var SUPPLIER_MESSAGES_SHEET_NAME = "supplier-messages";
+
+/**
+ * Creates the supplier-messages sheet tab if it doesn't exist.
+ * Returns the sheet GID for use as env var.
+ */
+function createSupplierMessagesSheet(ss) {
+  var existing = ss.getSheetByName(SUPPLIER_MESSAGES_SHEET_NAME);
+  if (existing) {
+    return { success: true, gid: existing.getSheetId(), message: "Sheet already exists" };
+  }
+
+  var sheet = ss.insertSheet(SUPPLIER_MESSAGES_SHEET_NAME);
+  var headers = ["תאריך", "נושא", "מק\"ט ספק", "סטטוס", "כמות", "צפי", "שויך להזמנה", "טופל"];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+  sheet.setFrozenRows(1);
+
+  return { success: true, gid: sheet.getSheetId() };
+}
+
+/**
+ * Adds a pending supplier message to the supplier-messages sheet.
+ */
+function addSupplierMessage(ss, data) {
+  var sheet = ss.getSheetByName(SUPPLIER_MESSAGES_SHEET_NAME);
+  if (!sheet) {
+    var created = createSupplierMessagesSheet(ss);
+    if (!created.success) return created;
+    sheet = ss.getSheetByName(SUPPLIER_MESSAGES_SHEET_NAME);
+  }
+
+  sheet.appendRow([
+    data.date || "",
+    data.subject || "",
+    data.supplierSku || "",
+    data.status || "",
+    data.quantity || "",
+    data.expectedDate || "",
+    "",  // שויך להזמנה — empty = pending
+    ""   // טופל — empty = not handled
+  ]);
+
+  return { success: true };
+}
+
+/**
+ * Links a pending supplier message to an order:
+ * 1. Writes the log entry to the chosen order row
+ * 2. Marks the message row as handled
+ */
+function linkSupplierMessage(ss, data) {
+  var messageRowIndex = data.messageRowIndex; // row in supplier-messages sheet
+  var orderRowIndex = data.orderRowIndex;     // row in orders sheet
+  var logEntry = data.logEntry;               // the log text to write
+
+  if (!messageRowIndex || !orderRowIndex || !logEntry) {
+    return { success: false, error: "Missing messageRowIndex, orderRowIndex, or logEntry" };
+  }
+
+  // 1. Write log to orders sheet
+  var ordersSheet = getSheetByGid(ss, ORDERS_GID);
+  if (!ordersSheet) return { success: false, error: "Orders sheet not found" };
+
+  var headers = ordersSheet.getRange(1, 1, 1, ordersSheet.getLastColumn()).getValues()[0];
+  var logCol = -1;
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i].toString().trim() === "לוג") { logCol = i + 1; break; }
+  }
+  if (logCol === -1) {
+    for (var i = 0; i < headers.length; i++) {
+      if (headers[i].toString().indexOf("לוג") !== -1) { logCol = i + 1; break; }
+    }
+  }
+  if (logCol === -1) return { success: false, error: "Log column not found" };
+
+  var range = ordersSheet.getRange(orderRowIndex, logCol);
+  var existing = range.getValue().toString().trim();
+  var finalValue = existing ? existing + " | " + logEntry : logEntry;
+  range.setValue(finalValue);
+
+  // Update expected date if provided
+  if (data.expectedDate) {
+    var expectedCol = -1;
+    for (var j = 0; j < headers.length; j++) {
+      if (headers[j].toString().indexOf("צפי") !== -1) { expectedCol = j + 1; break; }
+    }
+    if (expectedCol !== -1) {
+      ordersSheet.getRange(orderRowIndex, expectedCol).setValue(data.expectedDate);
+    }
+  }
+
+  // 2. Mark message as handled
+  var msgSheet = ss.getSheetByName(SUPPLIER_MESSAGES_SHEET_NAME);
+  if (msgSheet) {
+    var msgHeaders = msgSheet.getRange(1, 1, 1, msgSheet.getLastColumn()).getValues()[0];
+    // Find שויך להזמנה column
+    var linkedCol = -1;
+    var handledCol = -1;
+    for (var k = 0; k < msgHeaders.length; k++) {
+      var h = msgHeaders[k].toString().trim();
+      if (h.indexOf("שויך") !== -1) linkedCol = k + 1;
+      if (h === "טופל") handledCol = k + 1;
+    }
+    if (linkedCol !== -1) msgSheet.getRange(messageRowIndex, linkedCol).setValue(orderRowIndex);
+    if (handledCol !== -1) msgSheet.getRange(messageRowIndex, handledCol).setValue("כן");
+  }
+
   return { success: true };
 }
 

@@ -55,6 +55,18 @@ export interface HistoryItem {
   quantity: number;
 }
 
+export interface SupplierMessage {
+  date: string;           // תאריך
+  subject: string;        // נושא
+  supplierSku: string;    // מק"ט ספק
+  status: string;         // סטטוס
+  quantity: string;       // כמות
+  expectedDate: string;   // צפי
+  linkedOrder: string;    // שויך להזמנה (rowIndex or empty)
+  handled: string;        // טופל (כן/empty)
+  rowIndex: number;       // row in supplier-messages sheet
+}
+
 export interface ForecastPoint {
   date: string;
   quantity: number | null;

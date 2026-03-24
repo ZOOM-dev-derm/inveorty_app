@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { BarChart3, ShoppingCart, Settings, X } from "lucide-react";
+import { BarChart3, ShoppingCart, Settings, Mail, X } from "lucide-react";
 
 interface SideNavProps {
   open: boolean;
@@ -9,6 +9,7 @@ interface SideNavProps {
 const links = [
   { to: "/products", label: "מוצרים", icon: BarChart3 },
   { to: "/orders", label: "הזמנות", icon: ShoppingCart },
+  { to: "/supplier-messages", label: "הודעות ספק", icon: Mail },
   { to: "/settings", label: "הגדרות", icon: Settings },
 ];
 

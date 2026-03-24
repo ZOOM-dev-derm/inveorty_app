@@ -1,11 +1,12 @@
 import Papa from "papaparse";
-import type { Product, Order, HistoryItem, ConnectedProduct } from "@/types";
+import type { Product, Order, HistoryItem, ConnectedProduct, SupplierMessage } from "@/types";
 
 const SHEET_ID = import.meta.env.VITE_SHEET_ID;
 const ORDERS_GID = import.meta.env.VITE_ORDERS_GID;
 const PRODUCTS_GID = import.meta.env.VITE_PRODUCTS_GID;
 const HISTORY_GID = import.meta.env.VITE_HISTORY_GID;
 const CONNECTED_PRODUCTS_GID = import.meta.env.VITE_CONNECTED_PRODUCTS_GID;
+const SUPPLIER_MESSAGES_GID = import.meta.env.VITE_SUPPLIER_MESSAGES_GID;
 
 function parseDateString(dateStr: string): Date | null {
   // Try DD/MM/YYYY first (Israeli format)
@@ -203,6 +204,40 @@ export async function fetchOrders(): Promise<Order[]> {
     });
 }
 
+export async function fetchSupplierMessages(): Promise<SupplierMessage[]> {
+  if (!SUPPLIER_MESSAGES_GID) return [];
+
+  const rawWithIndex = await parseCsvWithIndex<Record<string, string>>(buildCsvUrl(SUPPLIER_MESSAGES_GID));
+  if (rawWithIndex.length === 0) return [];
+
+  const cols = Object.keys(rawWithIndex[0]?.data ?? {});
+  const dateKey = cols.find(k => k.includes("תאריך")) ?? "תאריך";
+  const subjectKey = cols.find(k => k.includes("נושא")) ?? "נושא";
+  const skuKey = cols.find(k => k.includes("מק") && k.includes("ספק")) ?? 'מק"ט ספק';
+  const statusKey = cols.find(k => k === "סטטוס") ?? cols.find(k => k.includes("סטטוס")) ?? "סטטוס";
+  const qtyKey = cols.find(k => k.includes("כמות")) ?? "כמות";
+  const expectedKey = cols.find(k => k.includes("צפי")) ?? "צפי";
+  const linkedKey = cols.find(k => k.includes("שויך")) ?? "שויך להזמנה";
+  const handledKey = cols.find(k => k === "טופל") ?? cols.find(k => k.includes("טופל")) ?? "טופל";
+
+  return rawWithIndex
+    .filter(item => item.data[skuKey]?.trim() || item.data[statusKey]?.trim())
+    .map(item => {
+      const row = item.data;
+      return {
+        date: row[dateKey]?.trim() ?? "",
+        subject: row[subjectKey]?.trim() ?? "",
+        supplierSku: row[skuKey]?.trim() ?? "",
+        status: row[statusKey]?.trim() ?? "",
+        quantity: row[qtyKey]?.trim() ?? "",
+        expectedDate: row[expectedKey]?.trim() ?? "",
+        linkedOrder: row[linkedKey]?.trim() ?? "",
+        handled: row[handledKey]?.trim() ?? "",
+        rowIndex: item.originalIndex,
+      };
+    });
+}
+
 // ── Write operations ──
 
 const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL;
@@ -278,4 +313,13 @@ export async function sendFollowUp(data: {
 
 export async function sendDailyOrderEmail(orderDate: string) {
   return postToSheet("sendDailyOrderEmail", { orderDate });
+}
+
+export async function linkSupplierMessage(data: {
+  messageRowIndex: number;
+  orderRowIndex: number;
+  logEntry: string;
+  expectedDate?: string;
+}) {
+  return postToSheet("linkSupplierMessage", data);
 }
