@@ -501,13 +501,20 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       const successItems = checkedItems.filter((_, idx) =>
         initialStatuses[idx]?.status !== "error"
       );
+      // Resolve container SKU to product name
+      const skuToName = new Map<string, string>();
+      if (products) {
+        for (const p of products) {
+          if (p.sku && p.name) skuToName.set(p.sku.trim(), p.name);
+        }
+      }
       setEmailOrderRows(
         successItems.map((item) => ({
           name: item.name,
           sku: item.sku,
           supplierSku: item.supplierSku,
           quantity: item.quantity,
-          container: item.container || "",
+          container: skuToName.get((item.container || "").trim()) || item.container || "",
           distributionNotes: item.distributionNotes || "",
           formula: item.formula || "",
           content: item.content || "",
@@ -983,10 +990,10 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1 block">טבלת הזמנות (Excel):</label>
                   <div className="overflow-x-auto border border-border rounded-lg bg-background">
-                    <table className="w-full text-xs" dir="rtl">
+                    <table className="w-full min-w-[700px] text-xs" dir="rtl">
                       <thead>
                         <tr className="bg-muted/50 border-b border-border">
-                          <th className="px-2 py-1.5 text-right font-medium">שם פריט</th>
+                          <th className="px-2 py-1.5 text-right font-medium min-w-[140px]">שם פריט</th>
                           <th className="px-2 py-1.5 text-right font-medium">מק״ט ספק</th>
                           <th className="px-2 py-1.5 text-right font-medium w-16">כמות</th>
                           <th className="px-2 py-1.5 text-right font-medium">מיכל</th>
