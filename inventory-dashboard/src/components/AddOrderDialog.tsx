@@ -651,7 +651,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       <DialogTrigger asChild>
         {trigger ?? defaultTrigger}
       </DialogTrigger>
-      <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>
             {dialogPhase === "form" && "הוספת הזמנה חדשה"}
@@ -998,16 +998,16 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">טבלת הזמנות (Excel):</label>
               <div className="overflow-x-auto border border-border rounded-lg bg-background">
-                <table className="w-full text-xs" dir="rtl">
+                <table className="w-full text-[11px]" dir="rtl">
                   <thead>
                     <tr className="bg-muted/50 border-b border-border">
-                      <th className="px-2 py-1.5 text-right font-medium min-w-[140px]">שם פריט</th>
-                      <th className="px-2 py-1.5 text-right font-medium">מק״ט ספק</th>
-                      <th className="px-2 py-1.5 text-right font-medium w-16">כמות</th>
-                      <th className="px-2 py-1.5 text-right font-medium">מיכל</th>
-                      <th className="px-2 py-1.5 text-right font-medium">פורמולה</th>
-                      <th className="px-2 py-1.5 text-right font-medium">תכולה</th>
-                      <th className="px-2 py-1.5 text-right font-medium">חלוקה+הערות</th>
+                      <th className="px-1.5 py-1 text-right font-medium">שם פריט</th>
+                      <th className="px-1.5 py-1 text-right font-medium">מק״ט ספק</th>
+                      <th className="px-1.5 py-1 text-right font-medium w-14">כמות</th>
+                      <th className="px-1.5 py-1 text-right font-medium">מיכל</th>
+                      <th className="px-1.5 py-1 text-right font-medium">פורמולה</th>
+                      <th className="px-1.5 py-1 text-right font-medium">תכולה</th>
+                      <th className="px-1.5 py-1 text-right font-medium">חלוקה+הערות</th>
                     </tr>
                   </thead>
                   <tbody>
