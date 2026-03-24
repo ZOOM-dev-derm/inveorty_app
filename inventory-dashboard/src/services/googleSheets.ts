@@ -320,6 +320,10 @@ export async function sendDailyOrderEmail(
   return postToSheet("sendDailyOrderEmail", { orderDate, customMessage, editedRows });
 }
 
+export async function updateOrderFields(rowIndex: number, fields: Record<string, string>, replaceComments?: string) {
+  return postToSheet("updateOrderFields", { rowIndex, fields, replaceComments });
+}
+
 export async function linkSupplierMessage(data: {
   messageRowIndex: number;
   orderRowIndex: number;

@@ -57,6 +57,9 @@ function doPost(e) {
       case "updateExpectedDate":
         result = updateExpectedDate(ss, data);
         break;
+      case "updateOrderFields":
+        result = updateOrderFields(ss, data);
+        break;
       case "createSupplierMessagesSheet":
         result = createSupplierMessagesSheet(ss);
         break;
@@ -296,6 +299,67 @@ function updateExpectedDate(ss, data) {
 
   sheet.getRange(rowIndex, expectedCol).setValue(data.expectedDate || "");
   return { success: true };
+}
+
+/**
+ * Generic field update for an order row.
+ * data.rowIndex: 1-based row number
+ * data.fields: { "columnHeader": "newValue", ... } — matches by header name (fuzzy)
+ * data.replaceComments: if provided, overwrites the לוג column entirely (for edit/delete)
+ */
+function updateOrderFields(ss, data) {
+  var sheet = getSheetByGid(ss, ORDERS_GID);
+  if (!sheet) return { success: false, error: "Orders sheet not found" };
+
+  var rowIndex = data.rowIndex;
+  if (!rowIndex || rowIndex < 2)
+    return { success: false, error: "Invalid row index" };
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var headerMap = {};
+  for (var i = 0; i < headers.length; i++) {
+    headerMap[headers[i].toString().trim()] = i + 1; // 1-based column
+  }
+
+  var fields = data.fields || {};
+  var updated = 0;
+
+  for (var fieldName in fields) {
+    if (!fields.hasOwnProperty(fieldName)) continue;
+    var col = headerMap[fieldName];
+    // Fuzzy match if exact not found
+    if (!col) {
+      for (var h in headerMap) {
+        if (h.indexOf(fieldName) !== -1 || fieldName.indexOf(h) !== -1) {
+          col = headerMap[h];
+          break;
+        }
+      }
+    }
+    if (col) {
+      sheet.getRange(rowIndex, col).setValue(fields[fieldName]);
+      updated++;
+    }
+  }
+
+  // Handle comment replacement (overwrite, not append)
+  if (data.replaceComments !== undefined) {
+    var logCol = -1;
+    for (var j = 0; j < headers.length; j++) {
+      if (headers[j].toString().trim() === "לוג") { logCol = j + 1; break; }
+    }
+    if (logCol === -1) {
+      for (var j2 = 0; j2 < headers.length; j2++) {
+        if (headers[j2].toString().indexOf("לוג") !== -1) { logCol = j2 + 1; break; }
+      }
+    }
+    if (logCol !== -1) {
+      sheet.getRange(rowIndex, logCol).setValue(data.replaceComments);
+      updated++;
+    }
+  }
+
+  return { success: true, updated: updated };
 }
 
 // ── Supplier Messages Sheet ──

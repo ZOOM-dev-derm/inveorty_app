@@ -1,9 +1,9 @@
-import { useOrders, useProducts, useUpdateOrderStatus, useUpdateOrderComments, useSendFollowUp } from "@/hooks/useSheetData";
+import { useOrders, useProducts, useUpdateOrderStatus, useUpdateOrderComments, useSendFollowUp, useUpdateOrderFields } from "@/hooks/useSheetData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { ShoppingCart, Loader2, Check, Calendar, Package, Clock, MessageSquare, Send, Mail, CheckCircle2 } from "lucide-react";
+import { ShoppingCart, Loader2, Check, Calendar, Package, Clock, MessageSquare, Send, Mail, CheckCircle2, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Order } from "@/types";
 
@@ -86,9 +86,16 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
   const statusMutation = useUpdateOrderStatus();
   const commentsMutation = useUpdateOrderComments();
   const followUpMutation = useSendFollowUp();
+  const updateFieldsMutation = useUpdateOrderFields();
   const [followUpSent, setFollowUpSent] = useState(false);
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [followUpMessage, setFollowUpMessage] = useState("");
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editExpectedDate, setEditExpectedDate] = useState("");
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editComments, setEditComments] = useState("");
+  const [editContainer, setEditContainer] = useState("");
+  const [editDistribution, setEditDistribution] = useState("");
   const { date: expectedDate, estimated } = getExpectedDate(order);
   const overdue = isOverdue(order);
   const received = isReceived(order);
@@ -248,6 +255,24 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
             )}
             {followUpSent ? "נשלח" : "מעקב"}
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-[11px] gap-1"
+            title="ערוך הזמנה"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditExpectedDate(order.expectedDate || "");
+              setEditQuantity(order.quantity || "");
+              setEditComments(order.comments || "");
+              setEditContainer(order.container || "");
+              setEditDistribution(order.distributionNotes || "");
+              setShowEditDialog(true);
+            }}
+          >
+            <Pencil className="h-3 w-3" />
+            עריכה
+          </Button>
         </div>
 
         {/* Follow-up email confirmation dialog */}
@@ -318,6 +343,108 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
           </DialogContent>
         </Dialog>
       </div>
+
+        {/* Edit order dialog */}
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent className="max-w-md" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>עריכת הזמנה — {order.productName}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">כמות</label>
+                  <input
+                    type="text"
+                    value={editQuantity}
+                    onChange={(e) => setEditQuantity(e.target.value)}
+                    className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">תאריך צפי</label>
+                  <input
+                    type="text"
+                    value={editExpectedDate}
+                    onChange={(e) => setEditExpectedDate(e.target.value)}
+                    placeholder="DD/MM/YYYY"
+                    className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">מיכל</label>
+                <input
+                  type="text"
+                  value={editContainer}
+                  onChange={(e) => setEditContainer(e.target.value)}
+                  className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">חלוקה+הערות</label>
+                <input
+                  type="text"
+                  value={editDistribution}
+                  onChange={(e) => setEditDistribution(e.target.value)}
+                  className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">לוג/הערות (ניתן לערוך ולמחוק)</label>
+                <textarea
+                  value={editComments}
+                  onChange={(e) => setEditComments(e.target.value)}
+                  className="w-full min-h-[100px] text-sm border border-border rounded-lg px-3 py-2 bg-background resize-y font-mono text-xs"
+                  dir="rtl"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">כל שורה מופרדת ב-|. ניתן למחוק, לערוך או להוסיף.</p>
+              </div>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+                ביטול
+              </Button>
+              <Button
+                disabled={updateFieldsMutation.isPending}
+                onClick={() => {
+                  const fields: Record<string, string> = {};
+                  if (editQuantity !== order.quantity) fields['כמות סה"כ'] = editQuantity;
+                  if (editExpectedDate !== (order.expectedDate || "")) fields["תאריך צפי"] = editExpectedDate;
+                  if (editContainer !== (order.container || "")) fields["מיכל"] = editContainer;
+                  if (editDistribution !== (order.distributionNotes || "")) fields["חלוקה+הערות"] = editDistribution;
+
+                  const commentsChanged = editComments !== (order.comments || "");
+
+                  if (Object.keys(fields).length === 0 && !commentsChanged) {
+                    setShowEditDialog(false);
+                    return;
+                  }
+
+                  updateFieldsMutation.mutate(
+                    {
+                      rowIndex: order.rowIndex,
+                      fields,
+                      replaceComments: commentsChanged ? editComments : undefined,
+                    },
+                    {
+                      onSuccess: () => setShowEditDialog(false),
+                      onError: (err) => {
+                        console.error("[EditOrder] Failed:", err);
+                        alert("שגיאה בשמירה. נסה שוב.");
+                      },
+                    }
+                  );
+                }}
+              >
+                {updateFieldsMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                ) : null}
+                שמור
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
       {/* Comment log section */}
       {showComments && (

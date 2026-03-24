@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { fetchProducts, fetchOrders, fetchHistory, fetchConnectedProducts, fetchSupplierMessages, addProduct, addOrder, updateOrderStatus, updateOrderComments, syncMissingProducts, syncSupplierSkus, sendFollowUp, linkSupplierMessage } from "@/services/googleSheets";
+import { fetchProducts, fetchOrders, fetchHistory, fetchConnectedProducts, fetchSupplierMessages, addProduct, addOrder, updateOrderStatus, updateOrderComments, updateOrderFields, syncMissingProducts, syncSupplierSkus, sendFollowUp, linkSupplierMessage } from "@/services/googleSheets";
 import type { Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint, ConnectedProduct, SupplierMessage } from "@/types";
 
 const FIVE_MINUTES = 5 * 60 * 1000;
@@ -486,6 +486,19 @@ export function useUpdateOrderComments() {
     },
     onSuccess: () => {
       // Delay refetch to allow Google Sheets CSV export to propagate
+      setTimeout(() => {
+        client.invalidateQueries({ queryKey: ["orders"] });
+      }, 5000);
+    },
+  });
+}
+
+export function useUpdateOrderFields() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { rowIndex: number; fields: Record<string, string>; replaceComments?: string }) =>
+      updateOrderFields(data.rowIndex, data.fields, data.replaceComments),
+    onSuccess: () => {
       setTimeout(() => {
         client.invalidateQueries({ queryKey: ["orders"] });
       }, 5000);
