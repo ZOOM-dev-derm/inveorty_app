@@ -515,6 +515,7 @@ export function useSendFollowUp() {
       productName: string;
       expectedDate: string;
       container?: string;
+      customMessage?: string;
     }) => sendFollowUp(data),
     onSuccess: () => {
       setTimeout(() => {

@@ -704,9 +704,13 @@ function sendFollowUp(ss, data) {
   var orderTag = "[DL-" + (data.dermaSku || "0000") + "--" + (data.orderDate || "unknown") + "]";
   var subject = "מעקב הזמנה Dermalusophy " + orderTag + " - " + (data.productName || "");
 
+  var messageText = data.customMessage || "שלום רב,\nאשמח לעדכון לגבי ההזמנה הבאה.";
+  var messageParagraphs = messageText.split("\n").map(function(line) {
+    return "<p>" + line + "</p>";
+  }).join("");
+
   var htmlBody = '<div dir="rtl" style="font-family:Arial,sans-serif;font-size:14px;color:#333;">' +
-    '<p>שלום רב,</p>' +
-    '<p>אשמח לעדכון לגבי ההזמנה הבאה:</p>' +
+    messageParagraphs +
     buildOrderEmailHtml(data) +
     '</div>';
 
@@ -751,6 +755,11 @@ function sendDailyOrderEmail(ss, data) {
 
   var orderDate = data.orderDate || "";
   if (!orderDate) return { success: false, error: "orderDate is required" };
+
+  // If frontend provided edited rows, use them directly (skip sheet reading)
+  if (data.editedRows && data.editedRows.length > 0) {
+    return sendDailyOrderEmailFromEdited(supplierEmail, orderDate, data);
+  }
 
   var sheet = getSheetByGid(ss, ORDERS_GID);
   if (!sheet) return { success: false, error: "Orders sheet not found" };
@@ -990,10 +999,13 @@ function sendDailyOrderEmail(ss, data) {
       (qtyIdx !== -1 ? matchingRows[t][qtyIdx] || "" : "") + '</td></tr>';
   }
 
+  var messageText = data.customMessage || "שלום רב,\nמצורפת טבלת הזמנות מתאריך " + orderDate + " (" + matchingRows.length + " פריטים).\nנא לאשר קבלת ההזמנה.";
+  var messageParagraphs = messageText.split("\n").map(function(line) {
+    return "<p>" + line + "</p>";
+  }).join("");
+
   var summaryHtml = '<div dir="rtl" style="font-family:Arial,sans-serif;font-size:14px;color:#333;">' +
-    '<p>שלום רב,</p>' +
-    '<p>מצורפת טבלת הזמנות מתאריך <b>' + orderDate + '</b> (' + matchingRows.length + ' פריטים).</p>' +
-    '<p>נא לאשר קבלת ההזמנה.</p>' +
+    messageParagraphs +
     '<table dir="rtl" style="border-collapse:collapse;margin:16px 0;width:100%;max-width:600px;">' +
     '<tr><th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">שם פריט</th>' +
     '<th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">קוד דרמה</th>' +
@@ -1012,6 +1024,81 @@ function sendDailyOrderEmail(ss, data) {
   });
 
   return { success: true, count: matchingRows.length };
+}
+
+/**
+ * Sends order email using frontend-edited row data instead of reading from sheet.
+ */
+function sendDailyOrderEmailFromEdited(supplierEmail, orderDate, data) {
+  var rows = data.editedRows;
+
+  var excelHeaders = [
+    "תאריך הזמנה", 'מק"ט פאר-פארם', 'כמות סה"כ', "מיכל", "תכולה",
+    "שם פריט", "פורמולה", "קוד דרמה", "חלוקה+הערות"
+  ];
+
+  var excelData = [excelHeaders];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    excelData.push([
+      orderDate,
+      r.supplierSku || "",
+      r.quantity || "",
+      r.container || "",
+      r.content || "",
+      r.name || "",
+      r.formula || "",
+      r.sku || "",
+      r.distributionNotes || ""
+    ]);
+  }
+
+  // Build CSV
+  var csvLines = excelData.map(function(row) {
+    return row.map(function(cell) {
+      var s = cell.toString();
+      if (s.indexOf(",") !== -1 || s.indexOf('"') !== -1 || s.indexOf("\n") !== -1) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }).join(",");
+  });
+  var csvContent = "\uFEFF" + csvLines.join("\r\n");
+  var csvBlob = Utilities.newBlob(csvContent, "text/csv", "Dermalusophy_Orders_" + orderDate.replace(/\//g, "-") + ".csv");
+
+  // Build inline table for email
+  var tableRows = "";
+  for (var t = 0; t < rows.length; t++) {
+    tableRows += '<tr><td style="padding:6px 10px;border:1px solid #ddd;">' + (rows[t].name || "") +
+      '</td><td style="padding:6px 10px;border:1px solid #ddd;">' + (rows[t].sku || "") +
+      '</td><td style="padding:6px 10px;border:1px solid #ddd;">' + (rows[t].quantity || "") + '</td></tr>';
+  }
+
+  var messageText = data.customMessage || "שלום רב,\nמצורפת טבלת הזמנות מתאריך " + orderDate + " (" + rows.length + " פריטים).\nנא לאשר קבלת ההזמנה.";
+  var messageParagraphs = messageText.split("\n").map(function(line) {
+    return "<p>" + line + "</p>";
+  }).join("");
+
+  var summaryHtml = '<div dir="rtl" style="font-family:Arial,sans-serif;font-size:14px;color:#333;">' +
+    messageParagraphs +
+    '<table dir="rtl" style="border-collapse:collapse;margin:16px 0;width:100%;max-width:600px;">' +
+    '<tr><th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">שם פריט</th>' +
+    '<th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">קוד דרמה</th>' +
+    '<th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">כמות</th></tr>' +
+    tableRows + '</table>' +
+    '<p>תודה,<br>Dermalusophy</p>' +
+    '</div>';
+
+  var subject = "הזמנות Dermalusophy - " + orderDate;
+
+  MailApp.sendEmail({
+    to: supplierEmail,
+    subject: subject,
+    htmlBody: summaryHtml,
+    attachments: [csvBlob],
+  });
+
+  return { success: true, count: rows.length };
 }
 
 // ── Gmail Polling + LLM Auto-logging ──

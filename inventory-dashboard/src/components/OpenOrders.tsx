@@ -1,8 +1,9 @@
 import { useOpenOrders, useProducts, useUpdateOrderStatus, useUpdateOrderComments, useSendFollowUp } from "@/hooks/useSheetData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { ShoppingCart, Loader2, Check, Calendar, Package, Clock, MessageSquare, Send, Mail } from "lucide-react";
+import { ShoppingCart, Loader2, Check, Calendar, Package, Clock, MessageSquare, Send, Mail, CheckCircle2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Order } from "@/types";
 
@@ -86,6 +87,8 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
   const commentsMutation = useUpdateOrderComments();
   const followUpMutation = useSendFollowUp();
   const [followUpSent, setFollowUpSent] = useState(false);
+  const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
+  const [followUpMessage, setFollowUpMessage] = useState("");
   const { date: expectedDate, estimated } = getExpectedDate(order);
   const overdue = isOverdue(order);
   const [showComments, setShowComments] = useState(false);
@@ -171,73 +174,18 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
           {overdue && (
             <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
               באיחור
             </Badge>
           )}
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className={`h-7 w-7 p-0 ${followUpSent ? "text-green-600" : ""}`}
-            disabled={followUpMutation.isPending}
-            title="שלח מייל מעקב לספק"
-            onClick={(e) => {
-              e.stopPropagation();
-              followUpMutation.mutate(
-                {
-                  rowIndex: order.rowIndex,
-                  orderDate: order.orderDate,
-                  supplierSku: order.supplierSku,
-                  dermaSku: order.dermaSku,
-                  quantity: order.quantity,
-                  productName: order.productName,
-                  expectedDate: order.expectedDate,
-                  container: order.container,
-                },
-                {
-                  onSuccess: () => {
-                    setFollowUpSent(true);
-                    setTimeout(() => setFollowUpSent(false), 3000);
-                  },
-                  onError: (err) => {
-                    console.error("[FollowUp] Failed:", err);
-                    alert("שגיאה בשליחת מייל מעקב. נסה שוב.");
-                  },
-                }
-              );
-            }}
-          >
-            {followUpMutation.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : followUpSent ? (
-              <Check className="h-3.5 w-3.5" />
-            ) : (
-              <Mail className="h-3.5 w-3.5" />
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={`h-7 w-7 p-0 ${hasComments ? "text-primary" : ""}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowComments((v) => !v);
-            }}
-          >
-            <MessageSquare className="h-3.5 w-3.5" />
-            {hasComments && (
-              <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[9px] rounded-full h-3.5 w-3.5 flex items-center justify-center">
-                {commentEntries.length}
-              </span>
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0"
+            className="h-7 px-2 text-[11px] gap-1"
             disabled={statusMutation.isPending}
+            title="סמן כהתקבל"
             onClick={(e) => {
               e.stopPropagation();
               statusMutation.mutate({
@@ -247,12 +195,120 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
             }}
           >
             {statusMutation.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
-              <Check className="h-3.5 w-3.5" />
+              <CheckCircle2 className="h-3 w-3" />
+            )}
+            התקבל
+          </Button>
+          <Button
+            variant={hasComments ? "default" : "outline"}
+            size="sm"
+            className={`h-7 px-2 text-[11px] gap-1 relative ${showComments ? "ring-1 ring-primary/50" : ""}`}
+            title="הצג/הוסף הערות"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowComments((v) => !v);
+            }}
+          >
+            <MessageSquare className="h-3 w-3" />
+            הערות
+            {hasComments && (
+              <Badge variant="secondary" className="h-4 px-1 text-[9px] mr-0.5">
+                {commentEntries.length}
+              </Badge>
             )}
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className={`h-7 px-2 text-[11px] gap-1 ${followUpSent ? "bg-green-50 text-green-700 border-green-300" : ""}`}
+            disabled={followUpMutation.isPending}
+            title="שלח מייל מעקב לספק"
+            onClick={(e) => {
+              e.stopPropagation();
+              setFollowUpMessage("שלום רב,\nאשמח לעדכון לגבי ההזמנה הבאה.");
+              setShowFollowUpDialog(true);
+            }}
+          >
+            {followUpMutation.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : followUpSent ? (
+              <Check className="h-3 w-3" />
+            ) : (
+              <Mail className="h-3 w-3" />
+            )}
+            {followUpSent ? "נשלח" : "מעקב"}
+          </Button>
         </div>
+
+        {/* Follow-up email confirmation dialog */}
+        <Dialog open={showFollowUpDialog} onOpenChange={setShowFollowUpDialog}>
+          <DialogContent className="max-w-md" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>שליחת מייל מעקב לספק</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground bg-muted/50 rounded-lg p-3">
+                <span><span className="font-medium text-foreground">שם פריט:</span> {order.productName}</span>
+                {order.supplierSku && <span><span className="font-medium text-foreground">מק״ט:</span> {order.supplierSku}</span>}
+                <span><span className="font-medium text-foreground">כמות:</span> {order.quantity}</span>
+                {order.orderDate && <span><span className="font-medium text-foreground">תאריך הזמנה:</span> {order.orderDate}</span>}
+                {order.container && <span><span className="font-medium text-foreground">מיכל:</span> {order.container}</span>}
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">הודעה לספק:</label>
+                <textarea
+                  value={followUpMessage}
+                  onChange={(e) => setFollowUpMessage(e.target.value)}
+                  className="w-full min-h-[100px] text-sm border border-border rounded-lg px-3 py-2 bg-background resize-y"
+                  dir="rtl"
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setShowFollowUpDialog(false)}>
+                ביטול
+              </Button>
+              <Button
+                disabled={followUpMutation.isPending}
+                onClick={() => {
+                  followUpMutation.mutate(
+                    {
+                      rowIndex: order.rowIndex,
+                      orderDate: order.orderDate,
+                      supplierSku: order.supplierSku,
+                      dermaSku: order.dermaSku,
+                      quantity: order.quantity,
+                      productName: order.productName,
+                      expectedDate: order.expectedDate,
+                      container: order.container,
+                      customMessage: followUpMessage.trim() || undefined,
+                    },
+                    {
+                      onSuccess: () => {
+                        setShowFollowUpDialog(false);
+                        setFollowUpSent(true);
+                        setTimeout(() => setFollowUpSent(false), 3000);
+                      },
+                      onError: (err) => {
+                        console.error("[FollowUp] Failed:", err);
+                        alert("שגיאה בשליחת מייל מעקב. נסה שוב.");
+                      },
+                    }
+                  );
+                }}
+              >
+                {followUpMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                ) : (
+                  <Send className="h-4 w-4 ml-2" />
+                )}
+                שלח מייל
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Comment log section */}

@@ -307,12 +307,17 @@ export async function sendFollowUp(data: {
   productName: string;
   expectedDate: string;
   container?: string;
+  customMessage?: string;
 }) {
   return postToSheet("sendFollowUp", data);
 }
 
-export async function sendDailyOrderEmail(orderDate: string) {
-  return postToSheet("sendDailyOrderEmail", { orderDate });
+export async function sendDailyOrderEmail(
+  orderDate: string,
+  customMessage?: string,
+  editedRows?: { name: string; sku: string; supplierSku: string; quantity: string; container: string; distributionNotes: string; formula: string; content: string }[]
+) {
+  return postToSheet("sendDailyOrderEmail", { orderDate, customMessage, editedRows });
 }
 
 export async function linkSupplierMessage(data: {
