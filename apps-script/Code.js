@@ -69,6 +69,17 @@ function doPost(e) {
       case "linkSupplierMessage":
         result = linkSupplierMessage(ss, data);
         break;
+      case "recalcMinAmounts":
+        result = recalcMinAmounts();
+        break;
+      case "setScriptProperty":
+        PropertiesService.getScriptProperties().setProperty(data.key, data.value);
+        result = { success: true, key: data.key, value: data.value };
+        break;
+      case "getScriptProperty":
+        var val = PropertiesService.getScriptProperties().getProperty(data.key);
+        result = { success: true, key: data.key, value: val };
+        break;
       default:
         result = { success: false, error: "Unknown action: " + action };
     }
@@ -96,6 +107,7 @@ function getSheetByGid(ss, gid) {
 // GIDs matching the app's env vars
 var PRODUCTS_GID = 1500898630;
 var ORDERS_GID = 75015255;
+var HISTORY_GID = 2071549789;
 
 function addProduct(ss, data) {
   var sheet = getSheetByGid(ss, PRODUCTS_GID);
@@ -1634,6 +1646,147 @@ function setupPollTrigger() {
     .everyMinutes(15)
     .create();
   Logger.log("Poll trigger created: every 15 minutes");
+}
+
+// ── Monthly Min-Amount Recalculation ──
+
+/**
+ * Recalculates minimum stock levels using the formula:
+ *   NewMin = (Min_old + Usage_last) / 7 × 6
+ *
+ * - Min_old: current minimum (represents ~6 months of demand)
+ * - Usage_last: total units sold in the current calendar month
+ * - Edge case: skip products with zero stock AND zero usage (likely out of stock)
+ *
+ * Designed to run monthly via a time-based trigger (28th of each month).
+ */
+function recalcMinAmounts() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet() ||
+           SpreadsheetApp.openById("1Cqr5SHHbH3MtCKU5h3GAShGG5NtpPA6LNCLNk16EH_Q");
+
+  // ── Read Products sheet ──
+  var productsSheet = getSheetByGid(ss, PRODUCTS_GID);
+  if (!productsSheet) return { success: false, error: "Products sheet not found" };
+
+  var prodData = productsSheet.getDataRange().getValues();
+  var prodHeaders = prodData[0];
+
+  var skuCol = -1, minCol = -1, stockCol = -1;
+  for (var i = 0; i < prodHeaders.length; i++) {
+    var h = prodHeaders[i].toString().trim();
+    if (h === "פריט") skuCol = i;
+    if (h === "מינימום") minCol = i;
+    if (h.indexOf("יתרת") !== -1 || (h.indexOf("מלאי") !== -1 && h.indexOf("מינימום") === -1)) stockCol = i;
+  }
+  if (skuCol === -1) return { success: false, error: "SKU column (פריט) not found" };
+  if (minCol === -1) return { success: false, error: "Min column (מינימום) not found" };
+  if (stockCol === -1) return { success: false, error: "Stock column (יתרת מלאי) not found" };
+
+  // ── Read History sheet & compute last month's usage per SKU ──
+  var historySheet = getSheetByGid(ss, HISTORY_GID);
+  if (!historySheet) return { success: false, error: "History sheet not found" };
+
+  var histData = historySheet.getDataRange().getValues();
+  var histHeaders = histData[0];
+
+  var hSkuCol = -1, hQtyCol = -1, hDateCol = -1;
+  for (var j = 0; j < histHeaders.length; j++) {
+    var hh = histHeaders[j].toString().trim();
+    if (hh.indexOf("דרמלוסופי") !== -1) hSkuCol = j;
+    if (hh.indexOf("כמות") !== -1) hQtyCol = j;
+    if (hh.indexOf("תאריך") !== -1) hDateCol = j;
+  }
+  if (hSkuCol === -1 || hQtyCol === -1 || hDateCol === -1) {
+    return { success: false, error: "History sheet columns not found (need SKU, quantity, date)" };
+  }
+
+  // Current calendar month boundaries (runs on 28th, so current month has enough data)
+  var now = new Date();
+  var firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  var endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+  var usageMap = {}; // sku → total usage last month
+  for (var r = 1; r < histData.length; r++) {
+    var rawDate = histData[r][hDateCol];
+    var d = parseHistoryDate(rawDate);
+    if (!d) continue;
+    if (d >= firstOfThisMonth && d <= endOfThisMonth) {
+      var sku = histData[r][hSkuCol].toString().trim();
+      var qty = parseFloat(histData[r][hQtyCol]) || 0;
+      if (sku) {
+        usageMap[sku] = (usageMap[sku] || 0) + qty;
+      }
+    }
+  }
+
+  // ── Recalculate and update ──
+  var updated = 0;
+  var skipped = 0;
+  var details = [];
+
+  for (var p = 1; p < prodData.length; p++) {
+    var prodSku = prodData[p][skuCol].toString().trim();
+    if (!prodSku) continue;
+
+    var minOld = parseFloat(prodData[p][minCol]) || 0;
+    var currentStock = parseFloat(prodData[p][stockCol]) || 0;
+    var usageLast = usageMap[prodSku] || 0;
+
+    // Edge case: zero stock AND zero usage → likely out of stock, skip
+    if (currentStock === 0 && usageLast === 0) {
+      skipped++;
+      continue;
+    }
+    // No min and no usage → inactive product, skip
+    if (minOld === 0 && usageLast === 0) {
+      skipped++;
+      continue;
+    }
+
+    var newMin = Math.round((minOld + usageLast) / 7 * 6);
+    if (newMin !== minOld) {
+      productsSheet.getRange(p + 1, minCol + 1).setValue(newMin);
+      details.push({ sku: prodSku, oldMin: minOld, newMin: newMin, usage: usageLast });
+      updated++;
+    }
+  }
+
+  Logger.log("recalcMinAmounts: updated=" + updated + ", skipped=" + skipped);
+  return { success: true, updated: updated, skipped: skipped, details: details };
+}
+
+/**
+ * Parses a date from the History sheet.
+ * Handles both Date objects (from Sheets) and DD/MM/YYYY strings.
+ */
+function parseHistoryDate(raw) {
+  if (raw instanceof Date) return raw;
+  if (typeof raw === "string") {
+    var parts = raw.trim().split("/");
+    if (parts.length === 3) {
+      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    }
+  }
+  return null;
+}
+
+/**
+ * Sets up a monthly trigger to run recalcMinAmounts on the 28th of each month at 3 AM.
+ * Run this function ONCE from the Apps Script editor.
+ */
+function setupMonthlyMinRecalcTrigger() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === "recalcMinAmounts") {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  ScriptApp.newTrigger("recalcMinAmounts")
+    .timeBased()
+    .onMonthDay(28)
+    .atHour(3)
+    .create();
+  Logger.log("Monthly min-amount recalc trigger created: 28th of each month at 3 AM");
 }
 
 // Required for CORS preflight
