@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { Header } from "./Header";
+import { StockJumpAlert } from "@/components/StockJumpAlert";
 
 export function Layout() {
   return (
@@ -11,6 +12,7 @@ export function Layout() {
       <footer className="text-center text-xs text-muted-foreground py-4 border-t border-border/30">
         הנתונים מתעדכנים כל 5 דקות
       </footer>
+      <StockJumpAlert />
     </div>
   );
 }

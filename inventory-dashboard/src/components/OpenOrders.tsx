@@ -3,9 +3,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { ShoppingCart, Loader2, Check, Calendar, Package, Clock, MessageSquare, Send, Mail, CheckCircle2, Pencil } from "lucide-react";
+import { ShoppingCart, Loader2, Check, Calendar, Package, Clock, MessageSquare, Send, Mail, CheckCircle2, Pencil, ArrowUp, PackageCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Order } from "@/types";
+import { useArrivedFlags, type ArrivedFlag } from "@/hooks/useArrivedFlags";
 
 type GroupMode = "date" | "product";
 
@@ -82,12 +83,13 @@ function parseCommentLog(raw: string): { date: string; text: string }[] {
   return parsed;
 }
 
-function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order; index: number; mode: GroupMode; expanded?: boolean; skuNameMap: Map<string, string> }) {
+function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRemoveArrivedFlag }: { order: Order; index: number; mode: GroupMode; expanded?: boolean; skuNameMap: Map<string, string>; arrivedFlag?: ArrivedFlag; onRemoveArrivedFlag?: (rowIndex: number) => void }) {
   const statusMutation = useUpdateOrderStatus();
   const commentsMutation = useUpdateOrderComments();
   const followUpMutation = useSendFollowUp();
   const updateFieldsMutation = useUpdateOrderFields();
   const [followUpSent, setFollowUpSent] = useState(false);
+  const [showArrivedDetails, setShowArrivedDetails] = useState(false);
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [followUpMessage, setFollowUpMessage] = useState("");
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -193,7 +195,22 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
               באיחור
             </Badge>
           )}
-          {!received && (
+          {!received && arrivedFlag && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px] gap-1 bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
+              title="הצג פרטי הגעה"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowArrivedDetails((v) => !v);
+              }}
+            >
+              <PackageCheck className="h-3 w-3" />
+              הגיעה
+            </Button>
+          )}
+          {!received && !arrivedFlag && (
             <Button
               variant="outline"
               size="sm"
@@ -463,6 +480,45 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
           </DialogContent>
         </Dialog>
 
+      {/* Arrived details section */}
+      {showArrivedDetails && arrivedFlag && (
+        <div className="mt-2 mr-6 border-t border-border/20 pt-2">
+          <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3 space-y-1.5 text-xs">
+            <div className="font-medium text-sm text-green-800 dark:text-green-300">
+              זוהתה קפיצת מלאי
+            </div>
+            <div className="flex items-center gap-2">
+              <ArrowUp className="h-3.5 w-3.5 text-green-600" />
+              <span>
+                מלאי עלה מ-<strong>{arrivedFlag.oldStock}</strong> ל-<strong>{arrivedFlag.newStock}</strong> (<strong>+{arrivedFlag.jump}</strong>)
+              </span>
+            </div>
+            <div>כמות בהזמנה: <strong>{arrivedFlag.orderQuantity}</strong></div>
+            <div className="pt-1">
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                disabled={statusMutation.isPending}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  statusMutation.mutate(
+                    { rowIndex: order.rowIndex, received: true },
+                    { onSuccess: () => onRemoveArrivedFlag?.(order.rowIndex) }
+                  );
+                }}
+              >
+                {statusMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin ml-1" />
+                ) : (
+                  <CheckCircle2 className="h-3 w-3 ml-1" />
+                )}
+                סמן כהתקבל
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Comment log section */}
       {showComments && (
         <div className="mt-2 mr-6 border-t border-border/20 pt-2">
@@ -510,7 +566,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap }: { order: Order;
   );
 }
 
-function OrderGroupCard({ group, mode, skuNameMap }: { group: OrderGroup; mode: GroupMode; skuNameMap: Map<string, string> }) {
+function OrderGroupCard({ group, mode, skuNameMap, arrivedFlags, onRemoveArrivedFlag }: { group: OrderGroup; mode: GroupMode; skuNameMap: Map<string, string>; arrivedFlags: Record<number, ArrivedFlag>; onRemoveArrivedFlag: (rowIndex: number) => void }) {
   const Icon = mode === "date" ? Calendar : Package;
   const [expanded, setExpanded] = useState(false);
 
@@ -574,7 +630,7 @@ function OrderGroupCard({ group, mode, skuNameMap }: { group: OrderGroup; mode: 
       >
         <div className="pt-2 border-t border-border/30">
           {group.orders.map((order, idx) => (
-            <OrderItem key={`${order.dermaSku}-${order.rowIndex}`} order={order} index={idx} mode={mode} expanded={expanded} skuNameMap={skuNameMap} />
+            <OrderItem key={`${order.dermaSku}-${order.rowIndex}`} order={order} index={idx} mode={mode} expanded={expanded} skuNameMap={skuNameMap} arrivedFlag={arrivedFlags[order.rowIndex]} onRemoveArrivedFlag={onRemoveArrivedFlag} />
           ))}
           <div className={`text-[10px] text-muted-foreground mt-2 transition-opacity duration-500 delay-300 ${expanded ? "opacity-100" : "opacity-0"}`}>
             * תאריך משוער (תאריך הזמנה + 3 חודשים)
@@ -600,6 +656,7 @@ export function OpenOrders({ search, showReceived = false }: { search: string; s
   }, [allOrders, showReceived]);
   const { data: products } = useProducts();
   const [groupMode, setGroupMode] = useState<GroupMode>("date");
+  const { arrivedFlags, removeArrivedFlag } = useArrivedFlags();
 
   const skuNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -716,7 +773,7 @@ export function OpenOrders({ search, showReceived = false }: { search: string; s
       {!isLoading && !error && groups.length > 0 && (
         <div className="grid gap-4 grid-cols-1">
           {groups.map((group) => (
-            <OrderGroupCard key={group.label} group={group} mode={groupMode} skuNameMap={skuNameMap} />
+            <OrderGroupCard key={group.label} group={group} mode={groupMode} skuNameMap={skuNameMap} arrivedFlags={arrivedFlags} onRemoveArrivedFlag={removeArrivedFlag} />
           ))}
         </div>
       )}
