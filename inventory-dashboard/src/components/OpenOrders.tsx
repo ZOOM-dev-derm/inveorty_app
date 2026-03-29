@@ -259,7 +259,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
             title="שלח מייל מעקב לספק"
             onClick={(e) => {
               e.stopPropagation();
-              setFollowUpMessage("שלום רב,\nאשמח לעדכון לגבי ההזמנה הבאה.");
+              setFollowUpMessage("שלום רב,\nאבקש לקבל מה צפי תאריך היצור של ההזמנה ומתי נקבל אותה?");
               setShowFollowUpDialog(true);
             }}
           >

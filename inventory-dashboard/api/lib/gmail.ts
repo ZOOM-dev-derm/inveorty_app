@@ -17,6 +17,16 @@ export interface EmailMessage {
   date: Date;
 }
 
+export interface EmailAttachment {
+  filename: string;
+  mimeType: string;
+  data: Buffer;
+}
+
+export interface EmailWithAttachments extends EmailMessage {
+  attachments: EmailAttachment[];
+}
+
 /** Fetch unread emails from the supplier */
 export async function fetchUnreadSupplierEmails(
   supplierEmail: string,
@@ -74,6 +84,96 @@ export async function markAsRead(messageId: string): Promise<void> {
     id: messageId,
     requestBody: { removeLabelIds: ["UNREAD"] },
   });
+}
+
+/** Fetch unread emails matching a query, including attachments */
+export async function fetchUnreadEmailsWithAttachments(
+  query: string,
+  maxResults = 10
+): Promise<EmailWithAttachments[]> {
+  const auth = getAuth();
+  const gmail = google.gmail({ version: "v1", auth });
+
+  const res = await gmail.users.messages.list({
+    userId: "me",
+    q: query,
+    maxResults,
+  });
+
+  const messageIds = res.data.messages || [];
+  if (messageIds.length === 0) return [];
+
+  const emails: EmailWithAttachments[] = [];
+
+  for (const { id } of messageIds) {
+    if (!id) continue;
+    const msg = await gmail.users.messages.get({
+      userId: "me",
+      id,
+      format: "full",
+    });
+
+    const headers = msg.data.payload?.headers || [];
+    const subject =
+      headers.find((h) => h.name?.toLowerCase() === "subject")?.value || "";
+    const dateStr =
+      headers.find((h) => h.name?.toLowerCase() === "date")?.value || "";
+
+    const body = extractPlainText(msg.data.payload);
+    const attachments = await extractAttachments(gmail, id, msg.data.payload);
+
+    emails.push({
+      id,
+      threadId: msg.data.threadId || "",
+      subject,
+      body,
+      date: new Date(dateStr),
+      attachments,
+    });
+  }
+
+  return emails;
+}
+
+/** Recursively extract attachments from Gmail message payload */
+async function extractAttachments(
+  gmail: any,
+  messageId: string,
+  payload: any
+): Promise<EmailAttachment[]> {
+  const attachments: EmailAttachment[] = [];
+  if (!payload) return attachments;
+
+  async function walk(part: any) {
+    const filename = part.filename || "";
+    const mimeType = part.mimeType || "";
+    const body = part.body || {};
+
+    if (filename && (body.attachmentId || body.data)) {
+      let data: Buffer;
+      if (body.attachmentId) {
+        // Large attachment — fetch separately
+        const att = await gmail.users.messages.attachments.get({
+          userId: "me",
+          messageId,
+          id: body.attachmentId,
+        });
+        data = Buffer.from(att.data.data, "base64url");
+      } else {
+        data = Buffer.from(body.data, "base64url");
+      }
+      attachments.push({ filename, mimeType, data });
+    }
+
+    if (part.parts) {
+      for (const sub of part.parts) {
+        await walk(sub);
+      }
+    }
+  }
+
+  await walk(payload);
+  return attachments;
 }
 
 /** Extract plain text body from Gmail message payload */

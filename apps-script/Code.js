@@ -39,6 +39,9 @@ function doPost(e) {
       case "bulkUpdateStock":
         result = bulkUpdateStock(ss, data);
         break;
+      case "bulkAddProducts":
+        result = bulkAddProducts(ss, data);
+        break;
       case "syncSupplierSkus":
         result = syncSupplierSkus(ss);
         break;
@@ -68,6 +71,9 @@ function doPost(e) {
         break;
       case "linkSupplierMessage":
         result = linkSupplierMessage(ss, data);
+        break;
+      case "bulkAddHistory":
+        result = bulkAddHistory(ss, data);
         break;
       case "recalcMinAmounts":
         result = recalcMinAmounts();
@@ -530,6 +536,61 @@ function bulkUpdateStock(ss, data) {
   }
 
   return { success: true, updated: updated, notFound: notFound };
+}
+
+/**
+ * Bulk-add new products to the Products sheet.
+ * data.products = [{ sku, name, stock }]
+ */
+function bulkAddProducts(ss, data) {
+  var sheet = getSheetByGid(ss, PRODUCTS_GID);
+  if (!sheet) return { success: false, error: "Products sheet not found" };
+
+  var products = data.products;
+  if (!products || !products.length) return { success: false, error: "No products provided" };
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // Map header names to column indices
+  var colMap = {};
+  for (var i = 0; i < headers.length; i++) {
+    colMap[headers[i].toString().trim()] = i;
+  }
+
+  var rows = [];
+  for (var j = 0; j < products.length; j++) {
+    var row = new Array(headers.length).fill("");
+    if (colMap["פריט"] !== undefined) row[colMap["פריט"]] = products[j].sku || "";
+    if (colMap["שם פריט"] !== undefined) row[colMap["שם פריט"]] = products[j].name || "";
+    if (colMap["יתרת מלאי"] !== undefined) row[colMap["יתרת מלאי"]] = products[j].stock || 0;
+    rows.push(row);
+  }
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length)
+       .setValues(rows);
+
+  return { success: true, added: rows.length };
+}
+
+/**
+ * Bulk-append rows to the History sheet.
+ * data.rows = [{ item_code, inventory, date }]
+ */
+function bulkAddHistory(ss, data) {
+  var sheet = getSheetByGid(ss, HISTORY_GID);
+  if (!sheet) return { success: false, error: "History sheet not found" };
+
+  var rows = data.rows;
+  if (!rows || !rows.length) return { success: false, error: "No rows provided" };
+
+  var values = rows.map(function(r) {
+    return [r.item_code, r.inventory, r.date];
+  });
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, values.length, values[0].length)
+       .setValues(values);
+
+  return { success: true, added: values.length };
 }
 
 /**
