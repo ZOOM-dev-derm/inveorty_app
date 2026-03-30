@@ -10,14 +10,20 @@ export interface ComaxItem {
 
 /**
  * Parse a Comax inventory report.
- * The file has a .xls extension but is actually HTML encoded in windows-1255.
- * Falls back to real Excel parsing if it's not HTML.
+ * Comax sends reports in three possible formats:
+ *   1. HTML disguised as .xls (windows-1255 encoded)
+ *   2. Real Excel (.xls/.xlsx)
+ *   3. Plain CSV (windows-1255 encoded)
  */
 export function parseComaxReport(buffer: Buffer): ComaxItem[] {
-  // Check if it's HTML (Comax sends HTML disguised as .xls)
   const head = buffer.subarray(0, 200).toString("ascii");
+  // Check if it's HTML (Comax sends HTML disguised as .xls)
   if (head.includes("<meta") || head.includes("<TABLE") || head.includes("<html")) {
     return parseHtmlReport(buffer);
+  }
+  // Check if it looks like CSV (comma-separated text, not binary)
+  if (looksLikeCsv(head)) {
+    return parseCsvReport(buffer);
   }
   // Fallback: real Excel
   return parseExcelReport(buffer);
@@ -47,9 +53,9 @@ function parseHtmlReport(buffer: Buffer): ComaxItem[] {
 
   for (let i = 0; i < headerCells.length; i++) {
     const h = headerCells[i];
-    // "קוד פריט" but not "ברקוד פריט"
-    if (h.includes("קוד פריט") && !h.includes("ברקוד")) itemCodeCol = i;
-    if (h.includes("כמות מלאי") || h.includes("יתרה נוכחית")) inventoryCol = i;
+    // "קוד פריט" or "פריט" but not "ברקוד פריט"
+    if ((h.includes("קוד פריט") || h === "פריט") && !h.includes("ברקוד")) itemCodeCol = i;
+    if (h.includes("כמות מלאי") || h.includes("יתרה נוכחית") || h.includes("יתרה במלאי")) inventoryCol = i;
     if (h.includes("שם פריט")) productNameCol = i;
     if (h.includes("ברקוד")) barcodeCol = i;
   }
@@ -118,6 +124,77 @@ function extractCells(rowHtml: string): string[] {
   return cells;
 }
 
+/** Check if buffer content looks like CSV (text with commas, not binary) */
+function looksLikeCsv(asciiHead: string): boolean {
+  // CSV will be mostly printable chars with commas and newlines
+  const printable = asciiHead.replace(/[^\x20-\x7E\r\n,]/g, "");
+  return printable.length > asciiHead.length * 0.3 && asciiHead.includes(",");
+}
+
+/** Parse CSV report with windows-1255 Hebrew encoding */
+function parseCsvReport(buffer: Buffer): ComaxItem[] {
+  const text = iconv.decode(buffer, "win1255");
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+
+  const headers = lines[0].split(",").map((h) => h.trim());
+  let itemCodeCol = -1;
+  let inventoryCol = -1;
+  let productNameCol = -1;
+  let barcodeCol = -1;
+
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i];
+    if ((h.includes("קוד פריט") || h === "פריט") && !h.includes("ברקוד"))
+      itemCodeCol = i;
+    if (
+      h.includes("כמות מלאי") ||
+      h.includes("יתרה נוכחית") ||
+      h.includes("יתרה במלאי")
+    )
+      inventoryCol = i;
+    if (h.includes("שם פריט")) productNameCol = i;
+    if (h.includes("ברקוד")) barcodeCol = i;
+  }
+
+  if (itemCodeCol === -1 || inventoryCol === -1) {
+    console.error(
+      "Comax parser: required columns not found in CSV. Headers:",
+      headers
+    );
+    return [];
+  }
+
+  const items: ComaxItem[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(",");
+    const rawCode = (cells[itemCodeCol] ?? "").trim();
+    const rawInventory = (cells[inventoryCol] ?? "").trim();
+
+    if (!rawCode || !rawInventory) continue;
+    if (rawCode.includes('סה"כ') || rawCode.includes("סה״כ")) continue;
+
+    const inventory = Number(rawInventory.replace(/,/g, ""));
+    if (isNaN(inventory)) continue;
+
+    items.push({
+      item_code: rawCode,
+      inventory,
+      product_name:
+        productNameCol >= 0
+          ? (cells[productNameCol] ?? "").trim() || undefined
+          : undefined,
+      barcode:
+        barcodeCol >= 0
+          ? (cells[barcodeCol] ?? "").trim() || undefined
+          : undefined,
+    });
+  }
+
+  return items;
+}
+
 /** Fallback: parse a real Excel file */
 function parseExcelReport(buffer: Buffer): ComaxItem[] {
   const workbook = XLSX.read(buffer, { type: "buffer" });
@@ -138,8 +215,8 @@ function parseExcelReport(buffer: Buffer): ComaxItem[] {
     const keys = Object.keys(rows[0]);
     for (const key of keys) {
       const k = key.trim();
-      if (k.includes("קוד פריט") && !k.includes("ברקוד")) itemCodeKey = key;
-      if (k.includes("כמות מלאי") || k.includes("יתרה נוכחית")) inventoryKey = key;
+      if ((k.includes("קוד פריט") || k === "פריט") && !k.includes("ברקוד")) itemCodeKey = key;
+      if (k.includes("כמות מלאי") || k.includes("יתרה נוכחית") || k.includes("יתרה במלאי")) inventoryKey = key;
       if (k.includes("שם פריט")) productNameKey = key;
       if (k.includes("ברקוד")) barcodeKey = key;
     }

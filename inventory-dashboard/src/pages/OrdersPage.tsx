@@ -6,7 +6,7 @@ import { SearchInput } from "@/components/layout/SearchInput";
 import { OpenOrders } from "@/components/OpenOrders";
 import { useOrders } from "@/hooks/useSheetData";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 const RECEIVED_VALUES = ["כן", "v", "✓", "true", "yes"];
 
@@ -44,7 +44,7 @@ export function OrdersPage() {
           className="text-xs gap-1.5 shrink-0"
           onClick={() => setShowReceived((v) => !v)}
         >
-          {showReceived ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          {showReceived ? <span className="text-sm"><MaterialIcon name="visibility_off" /></span> : <span className="text-sm"><MaterialIcon name="visibility" /></span>}
           {showReceived ? "הסתר שהתקבלו" : "הצג שהתקבלו"}
         </Button>
       </FilterBar>

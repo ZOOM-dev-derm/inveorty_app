@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { ShoppingCart, Loader2, Check, Calendar, Package, Clock, MessageSquare, Send, Mail, CheckCircle2, Pencil, ArrowUp, PackageCheck } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 import { useMemo, useState } from "react";
 import type { Order } from "@/types";
 import { useArrivedFlags, type ArrivedFlag } from "@/hooks/useArrivedFlags";
@@ -139,16 +139,16 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {mode === "date" ? (
-            <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5 self-start" />
+            <span className="text-sm text-muted-foreground shrink-0 mt-0.5 self-start"><MaterialIcon name="inventory_2" /></span>
           ) : (
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5 self-start" />
+            <span className="text-sm text-muted-foreground shrink-0 mt-0.5 self-start"><MaterialIcon name="calendar_today" /></span>
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2">
               <span className="text-sm font-medium leading-snug">
                 {mode === "date" ? (skuNameMap.get(order.dermaSku) || order.productName) : (order.orderDate || "לא ידוע")}
               </span>
-              <Badge variant="outline" className="text-xs shrink-0 bg-muted/50">
+              <Badge variant="outline" className="text-xs shrink-0 bg-white/5">
                 {order.quantity}
               </Badge>
             </div>
@@ -186,7 +186,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
         </div>
         <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
           {received && (
-            <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-800 border-green-300">
+            <Badge className="text-[10px] px-1.5 py-0 bg-green-500/10 text-green-400 border-green-500/20">
               התקבל ✓
             </Badge>
           )}
@@ -199,14 +199,14 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
             <Button
               variant="outline"
               size="sm"
-              className="h-7 px-2 text-[11px] gap-1 bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
+              className="h-7 px-2 text-[11px] gap-1 bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20"
               title="הצג פרטי הגעה"
               onClick={(e) => {
                 e.stopPropagation();
                 setShowArrivedDetails((v) => !v);
               }}
             >
-              <PackageCheck className="h-3 w-3" />
+              <span className="text-sm"><MaterialIcon name="package_2" /></span>
               הגיעה
             </Button>
           )}
@@ -226,9 +226,9 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
               }}
             >
               {statusMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <span className="text-sm animate-spin"><MaterialIcon name="progress_activity" /></span>
               ) : (
-                <CheckCircle2 className="h-3 w-3" />
+                <span className="text-sm"><MaterialIcon name="check_circle" /></span>
               )}
               התקבל
             </Button>
@@ -243,7 +243,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
               setShowComments((v) => !v);
             }}
           >
-            <MessageSquare className="h-3 w-3" />
+            <span className="text-sm"><MaterialIcon name="chat" /></span>
             הערות
             {hasComments && (
               <Badge variant="secondary" className="h-4 px-1 text-[9px] mr-0.5">
@@ -254,7 +254,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
           <Button
             variant="outline"
             size="sm"
-            className={`h-7 px-2 text-[11px] gap-1 ${followUpSent ? "bg-green-50 text-green-700 border-green-300" : ""}`}
+            className={`h-7 px-2 text-[11px] gap-1 ${followUpSent ? "bg-green-500/10 text-green-400 border-green-500/20" : ""}`}
             disabled={followUpMutation.isPending}
             title="שלח מייל מעקב לספק"
             onClick={(e) => {
@@ -264,11 +264,11 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
             }}
           >
             {followUpMutation.isPending ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <span className="text-sm animate-spin"><MaterialIcon name="progress_activity" /></span>
             ) : followUpSent ? (
-              <Check className="h-3 w-3" />
+              <span className="text-sm"><MaterialIcon name="check" /></span>
             ) : (
-              <Mail className="h-3 w-3" />
+              <span className="text-sm"><MaterialIcon name="mail" /></span>
             )}
             {followUpSent ? "נשלח" : "מעקב"}
           </Button>
@@ -287,7 +287,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
               setShowEditDialog(true);
             }}
           >
-            <Pencil className="h-3 w-3" />
+            <span className="text-sm"><MaterialIcon name="edit" /></span>
             עריכה
           </Button>
         </div>
@@ -299,7 +299,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
               <DialogTitle>שליחת מייל מעקב לספק</DialogTitle>
             </DialogHeader>
             <div className="space-y-3 text-sm">
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground bg-muted/50 rounded-lg p-3">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground bg-white/5 rounded-lg p-3">
                 <span><span className="font-medium text-foreground">שם פריט:</span> {order.productName}</span>
                 {order.supplierSku && <span><span className="font-medium text-foreground">מק״ט:</span> {order.supplierSku}</span>}
                 <span><span className="font-medium text-foreground">כמות:</span> {order.quantity}</span>
@@ -350,9 +350,9 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
                 }}
               >
                 {followUpMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  <span className="text-base animate-spin ml-2"><MaterialIcon name="progress_activity" /></span>
                 ) : (
-                  <Send className="h-4 w-4 ml-2" />
+                  <span className="text-base ml-2"><MaterialIcon name="send" /></span>
                 )}
                 שלח מייל
               </Button>
@@ -472,7 +472,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
                 }}
               >
                 {updateFieldsMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  <span className="text-base animate-spin ml-2"><MaterialIcon name="progress_activity" /></span>
                 ) : null}
                 שמור
               </Button>
@@ -483,12 +483,12 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
       {/* Arrived details section */}
       {showArrivedDetails && arrivedFlag && (
         <div className="mt-2 mr-6 border-t border-border/20 pt-2">
-          <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3 space-y-1.5 text-xs">
-            <div className="font-medium text-sm text-green-800 dark:text-green-300">
+          <div className="bg-green-500/10 rounded-lg p-3 space-y-1.5 text-xs">
+            <div className="font-medium text-sm text-green-400">
               זוהתה קפיצת מלאי
             </div>
             <div className="flex items-center gap-2">
-              <ArrowUp className="h-3.5 w-3.5 text-green-600" />
+              <span className="text-sm text-green-400"><MaterialIcon name="arrow_upward" /></span>
               <span>
                 מלאי עלה מ-<strong>{arrivedFlag.oldStock}</strong> ל-<strong>{arrivedFlag.newStock}</strong> (<strong>+{arrivedFlag.jump}</strong>)
               </span>
@@ -508,9 +508,9 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
                 }}
               >
                 {statusMutation.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin ml-1" />
+                  <span className="text-sm animate-spin ml-1"><MaterialIcon name="progress_activity" /></span>
                 ) : (
-                  <CheckCircle2 className="h-3 w-3 ml-1" />
+                  <span className="text-sm ml-1"><MaterialIcon name="check_circle" /></span>
                 )}
                 סמן כהתקבל
               </Button>
@@ -554,9 +554,9 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
               }}
             >
               {commentsMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <span className="text-sm animate-spin"><MaterialIcon name="progress_activity" /></span>
               ) : (
-                <Send className="h-3 w-3" />
+                <span className="text-sm"><MaterialIcon name="send" /></span>
               )}
             </Button>
           </div>
@@ -567,30 +567,26 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
 }
 
 function OrderGroupCard({ group, mode, skuNameMap, arrivedFlags, onRemoveArrivedFlag }: { group: OrderGroup; mode: GroupMode; skuNameMap: Map<string, string>; arrivedFlags: Record<number, ArrivedFlag>; onRemoveArrivedFlag: (rowIndex: number) => void }) {
-  const Icon = mode === "date" ? Calendar : Package;
+  const iconName = mode === "date" ? "calendar_today" : "inventory_2";
   const [expanded, setExpanded] = useState(false);
 
   return (
     <div
-      className={`relative rounded-xl border-2 p-4 transition-all duration-300 shadow-sm
-        ${group.hasOverdue
-          ? "border-destructive/40 bg-gradient-to-br from-rose-50/50 via-white to-pink-50/30 hover:border-destructive/60 hover:shadow-lg hover:shadow-red-100/50"
-          : "border-border/50 bg-gradient-to-br from-white via-background to-slate-50/30 hover:border-primary/30 hover:shadow-md"
-        }`}
+      className={`px-6 md:px-8 py-5 transition-colors ${group.hasOverdue ? "bg-red-950/20" : "hover:bg-white/5"}`}
     >
       {/* Header — always visible, tappable */}
       <div
         className="flex items-center justify-between cursor-pointer select-none"
         onClick={() => setExpanded((v) => !v)}
       >
-        <div className="flex items-center gap-2.5">
-          <div className={`p-2 rounded-xl ${group.hasOverdue ? "bg-destructive/10 ring-1 ring-destructive/20" : "bg-primary/10 ring-1 ring-primary/20"}`}>
-            <Icon className={`h-4 w-4 ${group.hasOverdue ? "text-destructive" : "text-primary"}`} />
+        <div className="flex items-center gap-3">
+          <div className={`p-2.5 rounded-xl ${group.hasOverdue ? "bg-destructive/10" : "bg-primary/10"}`}>
+            <span className={`text-lg ${group.hasOverdue ? "text-destructive" : "text-primary"}`}><MaterialIcon name={iconName} /></span>
           </div>
           <div>
-            <div className="font-bold text-base">{group.label}</div>
+            <div className="font-bold text-base font-display">{group.label}</div>
             <div className="text-xs text-muted-foreground font-medium flex items-center gap-1 flex-wrap">
-              <Package className="h-3 w-3" />
+              <span className="text-xs"><MaterialIcon name="inventory_2" /></span>
               {group.orders.length} פריטים
               {mode === "product" && group.orders[0]?.dermaSku && (
                 <>
@@ -607,28 +603,25 @@ function OrderGroupCard({ group, mode, skuNameMap, arrivedFlags, onRemoveArrived
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {group.hasOverdue && (
             <div className="flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-destructive" />
-              <span className="text-xs font-medium text-destructive">באיחור</span>
+              <span className="text-sm text-destructive"><MaterialIcon name="error" /></span>
+              <span className="text-xs font-bold text-destructive">באיחור</span>
             </div>
           )}
-          <svg
-            className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${expanded ? "rotate-180" : ""}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          <span className={`text-lg text-muted-foreground transition-transform duration-300 ${expanded ? "rotate-180" : ""}`}>
+            <MaterialIcon name="expand_more" />
+          </span>
         </div>
       </div>
 
       {/* Expandable order details */}
       <div
-        className="mt-3 overflow-hidden transition-all duration-300"
+        className="overflow-hidden transition-all duration-300"
         style={{ maxHeight: expanded ? `${group.orders.length * 160 + 80}px` : "0px" }}
       >
-        <div className="pt-2 border-t border-border/30">
+        <div className="pt-3 mt-3 border-t border-white/5">
           {group.orders.map((order, idx) => (
             <OrderItem key={`${order.dermaSku}-${order.rowIndex}`} order={order} index={idx} mode={mode} expanded={expanded} skuNameMap={skuNameMap} arrivedFlag={arrivedFlags[order.rowIndex]} onRemoveArrivedFlag={onRemoveArrivedFlag} />
           ))}
@@ -721,32 +714,32 @@ export function OpenOrders({ search, showReceived = false }: { search: string; s
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2.5">
-          <ShoppingCart className="h-5 w-5 text-primary" />
+          <span className="text-lg text-primary"><MaterialIcon name="shopping_cart" /></span>
           <h2 className="text-lg font-bold">הזמנות פתוחות</h2>
           {!isLoading && orders && (
             <Badge variant="outline">{orders.length}</Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 p-1 rounded-lg bg-muted">
+          <div className="flex gap-1 p-1 rounded-lg bg-white/5">
             <button
               onClick={() => setGroupMode("date")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${groupMode === "date"
-                ? "bg-white text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${groupMode === "date"
+                ? "bg-card text-foreground shadow-sm ring-1 ring-white/10"
+                : "text-muted-foreground hover:text-foreground hover:bg-white/10"
                 }`}
             >
-              <Calendar className="h-3.5 w-3.5" />
+              <span className="text-sm"><MaterialIcon name="calendar_today" /></span>
               לפי תאריך
             </button>
             <button
               onClick={() => setGroupMode("product")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${groupMode === "product"
-                ? "bg-white text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${groupMode === "product"
+                ? "bg-card text-foreground shadow-sm ring-1 ring-white/10"
+                : "text-muted-foreground hover:text-foreground hover:bg-white/10"
                 }`}
             >
-              <Package className="h-3.5 w-3.5" />
+              <span className="text-sm"><MaterialIcon name="inventory_2" /></span>
               לפי מוצר
             </button>
           </div>
@@ -757,7 +750,7 @@ export function OpenOrders({ search, showReceived = false }: { search: string; s
       {/* States */}
       {isLoading && (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <span className="text-2xl animate-spin text-muted-foreground"><MaterialIcon name="progress_activity" /></span>
         </div>
       )}
       {error && (
@@ -769,12 +762,14 @@ export function OpenOrders({ search, showReceived = false }: { search: string; s
         </p>
       )}
 
-      {/* Cards grid */}
+      {/* Orders list */}
       {!isLoading && !error && groups.length > 0 && (
-        <div className="grid gap-4 grid-cols-1">
-          {groups.map((group) => (
-            <OrderGroupCard key={group.label} group={group} mode={groupMode} skuNameMap={skuNameMap} arrivedFlags={arrivedFlags} onRemoveArrivedFlag={removeArrivedFlag} />
-          ))}
+        <div className="bg-card rounded-3xl overflow-hidden border border-border">
+          <div className="divide-y divide-border">
+            {groups.map((group) => (
+              <OrderGroupCard key={group.label} group={group} mode={groupMode} skuNameMap={skuNameMap} arrivedFlags={arrivedFlags} onRemoveArrivedFlag={removeArrivedFlag} />
+            ))}
+          </div>
         </div>
       )}
 

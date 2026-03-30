@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Package, Warehouse } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { FilterBar } from "@/components/layout/FilterBar";
@@ -166,13 +166,13 @@ export function ProductsPage() {
         <SummaryCard
           label="סה״כ במלאי"
           value={totalStock}
-          icon={<Warehouse className="h-5 w-5" />}
+          icon={<span className="text-xl"><MaterialIcon name="warehouse" /></span>}
           variant="blue"
         />
         <SummaryCard
           label="הזמנות בדרך"
           value={productsOnTheWay}
-          icon={<Package className="h-5 w-5" />}
+          icon={<span className="text-xl"><MaterialIcon name="local_shipping" /></span>}
           variant="purple"
         />
       </div>
@@ -184,12 +184,12 @@ export function ProductsPage() {
           value={supplierFilter}
           onChange={setSupplierFilter}
         />
-        <div className="flex gap-1 p-1 rounded-lg bg-muted/80 shrink-0">
+        <div className="flex gap-1 p-1 rounded-lg bg-white/5 shrink-0">
           <button
             onClick={() => setStockFilter("belowMin")}
             className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${stockFilter === "belowMin"
-              ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
-              : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+              ? "bg-destructive/20 text-destructive border border-destructive/30"
+              : "text-muted-foreground hover:text-foreground hover:bg-white/10"
               }`}
           >
             מתחת למינימום
@@ -197,8 +197,8 @@ export function ProductsPage() {
           <button
             onClick={() => setStockFilter("all")}
             className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${stockFilter === "all"
-              ? "bg-white text-foreground shadow-sm ring-1 ring-primary/10"
-              : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+              ? "bg-card text-foreground shadow-sm ring-1 ring-white/10"
+              : "text-muted-foreground hover:text-foreground hover:bg-white/10"
               }`}
           >
             כל המוצרים
@@ -230,7 +230,7 @@ export function ProductsPage() {
       {!isLoading && !error && filteredItems.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center">
-            <Search className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+            <span className="text-3xl text-muted-foreground/40 block mx-auto mb-3"><MaterialIcon name="search" /></span>
             <p className="text-muted-foreground text-sm">
               {search ? "לא נמצאו מוצרים תואמים" : "אין נתוני מלאי"}
             </p>
@@ -238,7 +238,15 @@ export function ProductsPage() {
         </Card>
       )}
       {!isLoading && !error && filteredItems.length > 0 && (
-        <div className="flex flex-col gap-2">
+        <div className="bg-card rounded-3xl overflow-hidden border border-border">
+          {/* Table header */}
+          <div className="grid grid-cols-12 gap-4 px-6 md:px-8 py-5 border-b border-border text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] bg-white/5">
+            <div className="col-span-5">מוצר</div>
+            <div className="col-span-2 text-center">מלאי זמין</div>
+            <div className="col-span-3">סטטוס אספקה</div>
+            <div className="col-span-2 text-left">פעולות</div>
+          </div>
+          <div className="divide-y divide-border">
           {filteredItems.map((item) => {
             const open = pinnedSku === item.sku;
             const hasOrder = skusWithOpenOrders.has(item.sku);
@@ -250,60 +258,77 @@ export function ProductsPage() {
             const linked = linkedProductsMap.get(item.sku);
             return (
               <div key={item.sku}>
-                {/* Collapsed row */}
+                {/* Collapsed row — grid layout matching mockup */}
                 <div
-                  className={`px-4 py-3 rounded-xl border bg-card shadow-sm cursor-pointer transition-colors select-none
-                    ${open ? "border-primary/30 bg-primary/5 rounded-b-none border-b-0" : "hover:bg-muted/30"}`}
+                  className={`px-6 md:px-8 py-5 cursor-pointer transition-colors select-none
+                    ${open ? "bg-primary/5" : "hover:bg-muted/50"}`}
                   onClick={() => handleRowClick(item.sku)}
                 >
-                  <div className="flex items-center justify-between gap-3 mb-2">
-                    <span className="font-semibold text-sm truncate">{item.productName}</span>
-                    <span className="text-sm font-bold text-muted-foreground shrink-0">
-                      {item.sku}
-                      {peerFarmSku && <span className="text-muted-foreground font-normal"> ({peerFarmSku})</span>}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    {hasOrder ? (
-                      isOverdue ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-red-50 text-red-700 border border-red-200/60">
-                          הזמנה בדרך: באיחור
+                  <div className="grid grid-cols-12 gap-4 items-center">
+                    {/* Product name + SKU */}
+                    <div className="col-span-5 flex items-center gap-4">
+                      <div>
+                        <h3 className="font-bold text-sm text-foreground mb-1">{item.productName}</h3>
+                        <span className="text-[10px] font-bold font-display text-primary tracking-widest">
+                          REF: {item.sku}
+                          {peerFarmSku && <span className="text-muted-foreground font-normal mr-1">({peerFarmSku})</span>}
                         </span>
-                      ) : expectedInfo ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-green-50 text-green-700 border border-green-200/60">
-                          הזמנה בדרך: {expectedInfo.display}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-green-50 text-green-700 border border-green-200/60">
-                          הזמנה בדרך
-                        </span>
-                      )
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-muted/50 text-muted-foreground border border-border/60">
-                        אין הזמנה
-                      </span>
-                    )}
-                    {days != null ? (
-                      <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md border ${
-                        days <= 30
-                          ? "bg-red-50 text-red-700 border-red-200/60"
-                          : days <= 60
-                            ? "bg-amber-50 text-amber-700 border-amber-200/60"
-                            : "bg-muted/50 text-muted-foreground border-border/60"
+                      </div>
+                    </div>
+
+                    {/* Stock count — centered */}
+                    <div className="col-span-2 text-center">
+                      <span className={`text-xl font-bold font-display ${
+                        days != null && days <= 30 ? "text-destructive" : "text-foreground"
                       }`}>
-                        צפי לסיום סחורה: {days} ימים
+                        {item.currentStock}
                       </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-muted/50 text-muted-foreground border-border/60">
-                        —
+                      <span className={`block text-[9px] uppercase tracking-widest ${
+                        days != null && days <= 30 ? "text-destructive font-bold" : "text-muted-foreground"
+                      }`}>
+                        {days != null && days <= 30 ? "חוסר במלאי" : "יחידות"}
                       </span>
-                    )}
+                    </div>
+
+                    {/* Supply status */}
+                    <div className="col-span-3">
+                      {hasOrder ? (
+                        isOverdue ? (
+                          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-widest mb-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                            הזמנה בדרך - עיכוב
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-widest mb-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                            הזמנה בדרך - בזמן
+                          </div>
+                        )
+                      ) : (
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 text-muted-foreground text-[10px] font-bold uppercase tracking-widest mb-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+                          אין הזמנה פעילה
+                        </div>
+                      )}
+                      {days != null && (
+                        <p className={`text-xs ${days <= 30 ? "text-destructive font-bold" : "text-muted-foreground"}`}>
+                          צפי לסיום סחורה: {days} ימים
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="col-span-2 text-left flex gap-1">
+                      <button className="p-2 text-muted-foreground hover:text-foreground transition-colors">
+                        <MaterialIcon name="more_vert" className="text-lg" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Expanded graph */}
                 {open && (
-                  <div className="border border-primary/30 border-t-0 rounded-b-xl overflow-hidden">
+                  <div className="border-x border-b border-primary/30 overflow-hidden">
                     <ProductGraph
                       sku={item.sku}
                       productName={item.productName}
@@ -318,6 +343,7 @@ export function ProductsPage() {
               </div>
             );
           })}
+          </div>
         </div>
       )}
     </>

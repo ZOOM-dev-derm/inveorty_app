@@ -21,14 +21,14 @@ export function LoginPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/30">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-slate-900/30">
         <div className="animate-pulse text-muted-foreground">טוען...</div>
       </div>
     );
   }
 
   return (
-    <div dir="rtl" className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/30">
+    <div dir="rtl" className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-slate-900/30">
       <div className="flex flex-col items-center gap-8 p-8">
         <img src={logoSrc} alt="Dermalosophy" className="h-16 w-auto" />
         <div className="text-center space-y-2">

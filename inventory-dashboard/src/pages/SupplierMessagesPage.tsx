@@ -16,7 +16,7 @@ import {
   useLinkSupplierMessage,
 } from "@/hooks/useSheetData";
 import type { SupplierMessage, Order } from "@/types";
-import { Link2, CheckCircle2, Clock, Loader2 } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 export function SupplierMessagesPage() {
   const { data: messages, isLoading } = useSupplierMessages();
@@ -41,7 +41,7 @@ export function SupplierMessagesPage() {
           size="sm"
           onClick={() => setTab("pending")}
         >
-          <Clock className="h-4 w-4 ml-1.5" />
+          <span className="text-base ml-1.5"><MaterialIcon name="schedule" /></span>
           ממתינים
           {pending.length > 0 && (
             <Badge variant="secondary" className="mr-1.5 text-xs">
@@ -54,14 +54,14 @@ export function SupplierMessagesPage() {
           size="sm"
           onClick={() => setTab("handled")}
         >
-          <CheckCircle2 className="h-4 w-4 ml-1.5" />
+          <span className="text-base ml-1.5"><MaterialIcon name="check_circle" /></span>
           טופלו
         </Button>
       </div>
 
       {isLoading && (
         <div className="flex items-center justify-center py-12 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin ml-2" />
+          <span className="text-lg animate-spin ml-2"><MaterialIcon name="progress_activity" /></span>
           טוען הודעות...
         </div>
       )}
@@ -144,7 +144,7 @@ function MessageCard({
             {!isPending && (
               <Badge
                 variant="secondary"
-                className="bg-green-100 text-green-800 text-xs shrink-0"
+                className="bg-green-500/10 text-green-400 text-xs shrink-0"
               >
                 טופל
               </Badge>
@@ -205,9 +205,9 @@ function MessageCard({
                     disabled={!selectedOrder || linkMutation.isPending}
                   >
                     {linkMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-base animate-spin"><MaterialIcon name="progress_activity" /></span>
                     ) : (
-                      <Link2 className="h-4 w-4 ml-1" />
+                      <span className="text-base ml-1"><MaterialIcon name="link" /></span>
                     )}
                     שייך
                   </Button>

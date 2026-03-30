@@ -7,27 +7,29 @@ interface SummaryCardProps {
   variant?: "blue" | "purple" | "rose" | "amber";
 }
 
-const variants = {
-  blue: "bg-blue-50/70 border-blue-100/60 text-blue-700",
-  purple: "bg-purple-50/70 border-purple-100/60 text-purple-700",
-  rose: "bg-rose-50/70 border-rose-100/60 text-rose-700",
-  amber: "bg-amber-50/70 border-amber-100/60 text-amber-700",
+const iconBg = {
+  blue: "bg-blue-500/20",
+  purple: "bg-purple-500/20",
+  rose: "bg-rose-500/20",
+  amber: "bg-amber-500/20",
 };
 
-const valueVariants = {
-  blue: "text-blue-900",
-  purple: "text-purple-900",
-  rose: "text-rose-900",
-  amber: "text-amber-900",
+const iconColor = {
+  blue: "text-blue-400",
+  purple: "text-purple-400",
+  rose: "text-rose-400",
+  amber: "text-amber-400",
 };
 
 export function SummaryCard({ label, value, icon, variant = "blue" }: SummaryCardProps) {
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${variants[variant]}`}>
-      <div className="shrink-0 opacity-70">{icon}</div>
+    <div className="flex items-center gap-4 px-5 py-4 rounded-2xl border border-border bg-card">
+      <div className={`shrink-0 p-3 rounded-xl ${iconBg[variant]} ${iconColor[variant]}`}>
+        {icon}
+      </div>
       <div>
-        <div className="text-xs font-medium">{label}</div>
-        <div className={`text-lg font-bold ${valueVariants[variant]}`}>
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+        <div className="text-2xl font-bold font-display text-foreground">
           {typeof value === "number" ? value.toLocaleString() : value}
         </div>
       </div>

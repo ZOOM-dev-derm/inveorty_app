@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardList, Loader2 } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 export function InventoryOverview() {
   const { data: items, isLoading, error } = useInventoryOverview();
@@ -17,7 +17,7 @@ export function InventoryOverview() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center gap-2">
-        <ClipboardList className="h-5 w-5 text-primary" />
+        <span className="text-xl text-primary"><MaterialIcon name="assignment" /></span>
         <CardTitle>סקירת מלאי</CardTitle>
         {!isLoading && (
           <Badge variant="outline" className="mr-auto">
@@ -28,7 +28,7 @@ export function InventoryOverview() {
       <CardContent>
         {isLoading && (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <span className="text-2xl animate-spin text-muted-foreground"><MaterialIcon name="progress_activity" /></span>
           </div>
         )}
         {error && (

@@ -14,7 +14,7 @@ import { useProductForecast } from "@/hooks/useSheetData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AddOrderDialog } from "./AddOrderDialog";
-import { TrendingDown, TrendingUp, Minus, Truck, AlertCircle, ShoppingCart, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 interface ProductGraphProps {
   sku: string;
@@ -30,7 +30,6 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
   const { chartData, declineRate, minAmount, realRate, minRate, isLoading, error } = useProductForecast(sku, currentStock);
 
   const [zoomRange, setZoomRange] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
-  const wheelThrottleRef = useRef<number | null>(null);
   const touchRef = useRef<{ startDist: number; startRange: { start: number; end: number }; lastX: number; fingers: number } | null>(null);
 
   // Reset zoom range when chartData changes
@@ -89,34 +88,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
     });
   }, [chartData.length]);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    if (wheelThrottleRef.current) return;
-    wheelThrottleRef.current = window.setTimeout(() => { wheelThrottleRef.current = null; }, 50);
-
-    const dataLen = chartData.length;
-    if (dataLen < 3) return;
-
-    setZoomRange(prev => {
-      const range = prev.end - prev.start;
-      const zoomDir = e.deltaY < 0 ? 1 : -1; // up = zoom in
-      const step = Math.max(1, Math.round(range * 0.05));
-      if (zoomDir > 0) {
-        // Zoom in
-        if (range < 3) return prev;
-        return {
-          start: Math.min(prev.end - 2, prev.start + step),
-          end: Math.max(prev.start + 2, prev.end - step),
-        };
-      } else {
-        // Zoom out
-        return {
-          start: Math.max(0, prev.start - step),
-          end: Math.min(dataLen - 1, prev.end + step),
-        };
-      }
-    });
-  }, [chartData.length]);
+  // Wheel zoom disabled — use zoom buttons instead
 
   const getTouchDist = (touches: React.TouchList) => {
     if (touches.length < 2) return 0;
@@ -320,11 +292,11 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
               : "קצב שינוי חודשי מחושב מנתוני היסטוריה"}
           >
             {isDecline ? (
-              <TrendingDown className="h-3 w-3" />
+              <MaterialIcon name="trending_down" className="text-xs" />
             ) : isGrowth ? (
-              <TrendingUp className="h-3 w-3" />
+              <MaterialIcon name="trending_up" className="text-xs" />
             ) : (
-              <Minus className="h-3 w-3" />
+              <MaterialIcon name="remove" className="text-xs" />
             )}
             <span className="font-semibold">{Math.abs(ratePerMonth)}</span>/חודש
           </span>
@@ -343,7 +315,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
               className="status-chip chip-ontheway"
               onClick={() => onOrdersClick?.(productName)}
             >
-              <Truck className="h-3 w-3" />
+              <MaterialIcon name="local_shipping" className="text-xs" />
               <span className="font-semibold">{onTheWay}</span> בדרך
             </span>
           )}
@@ -351,7 +323,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
           {/* Critical Point Alert Chip */}
           {criticalPoint && (
             <span className="status-chip chip-alert">
-              <AlertCircle className="h-3 w-3" />
+              <MaterialIcon name="error" className="text-xs" />
               <span className="font-semibold">זמן להזמנה</span>
             </span>
           )}
@@ -361,7 +333,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
             <AddOrderDialog
               trigger={
                 <Button variant="outline" size="sm" className="h-6 md:h-7 gap-1.5 text-[10px] md:text-xs px-2 md:px-2.5 border-primary/30 text-primary hover:bg-primary/5">
-                  <ShoppingCart className="h-3 w-3" />
+                  <MaterialIcon name="shopping_cart" className="text-xs" />
                   הזמן עכשיו
                 </Button>
               }
@@ -392,7 +364,6 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
       <CardContent className="p-0 pr-0">
         <div
           className="h-64 md:h-80 w-full relative touch-none"
-          onWheel={handleWheel}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -400,20 +371,20 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
           {/* Zoom control buttons */}
           <div className="absolute top-1 left-1 md:top-2 md:left-2 z-10 flex items-center gap-0.5 md:gap-1 bg-background/80 backdrop-blur-sm rounded-lg border border-border/50 p-0.5 shadow-sm">
             <Button variant="ghost" size="icon" className="h-8 w-8 md:h-7 md:w-7" onClick={zoomIn} title="זום פנימה">
-              <ZoomIn className="h-4 md:h-3.5 w-4 md:w-3.5" />
+              <MaterialIcon name="zoom_in" className="text-base md:text-sm" />
             </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8 md:h-7 md:w-7" onClick={zoomOut} title="זום החוצה">
-              <ZoomOut className="h-4 md:h-3.5 w-4 md:w-3.5" />
+              <MaterialIcon name="zoom_out" className="text-base md:text-sm" />
             </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8 md:h-7 md:w-7" onClick={resetZoom} title="איפוס תצוגה" disabled={!isZoomed}>
-              <RotateCcw className="h-4 md:h-3.5 w-4 md:w-3.5" />
+              <MaterialIcon name="restart_alt" className="text-base md:text-sm" />
             </Button>
             <div className="w-px h-4 bg-border/50" />
             <Button variant="ghost" size="icon" className="h-8 w-8 md:h-7 md:w-7" onClick={panLeft} title="הזז שמאלה" disabled={zoomRange.start === 0}>
-              <ChevronLeft className="h-4 md:h-3.5 w-4 md:w-3.5" />
+              <MaterialIcon name="chevron_left" className="text-base md:text-sm" />
             </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8 md:h-7 md:w-7" onClick={panRight} title="הזז ימינה" disabled={zoomRange.end >= chartData.length - 1}>
-              <ChevronRight className="h-4 md:h-3.5 w-4 md:w-3.5" />
+              <MaterialIcon name="chevron_right" className="text-base md:text-sm" />
             </Button>
           </div>
           <ResponsiveContainer width="100%" height="100%">
@@ -423,28 +394,28 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
             >
               <defs>
                 <linearGradient id={`gradient-actual-${sku}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="oklch(0.55 0.13 200)" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="oklch(0.55 0.13 200)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.35} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id={`gradient-forecast-${sku}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="oklch(0.65 0.15 30)" stopOpacity={0.1} />
-                  <stop offset="95%" stopColor="oklch(0.65 0.15 30)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.1} />
+                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id={`gradient-order-${sku}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="oklch(0.55 0.15 280)" stopOpacity={0.12} />
-                  <stop offset="95%" stopColor="oklch(0.55 0.15 280)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#a855f7" stopOpacity={0.12} />
+                  <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.9 0.01 30)" opacity={0.4} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" opacity={1} />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 10, fontFamily: "Heebo" }}
+                tick={{ fontSize: 10, fontFamily: "Heebo", fill: "#94a3b8" }}
                 tickLine={false}
                 axisLine={false}
                 interval="preserveStartEnd"
               />
               <YAxis
-                tick={{ fontSize: 10, fontFamily: "Heebo" }}
+                tick={{ fontSize: 10, fontFamily: "Heebo", fill: "#94a3b8" }}
                 tickLine={false}
                 axisLine={false}
                 width={45}
@@ -453,8 +424,10 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
               <Tooltip
                 contentStyle={{
                   borderRadius: "12px",
-                  border: "1px solid oklch(0.9 0.01 30)",
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  backgroundColor: "#1e293b",
+                  color: "#e2e8f0",
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
                   fontSize: "12px",
                   direction: "rtl",
                   fontFamily: "Heebo",
@@ -472,18 +445,18 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
               />
               <ReferenceLine
                 y={15}
-                stroke="oklch(0.62 0.19 25)"
+                stroke="#ef4444"
                 strokeDasharray="4 4"
                 strokeWidth={1.5}
-                label={{ value: "מלאי נמוך", position: "insideTopRight", fontSize: 10, fill: "oklch(0.62 0.19 25)", fontFamily: "Heebo", fontWeight: 600 }}
+                label={{ value: "מלאי נמוך", position: "insideTopRight", fontSize: 10, fill: "#ef4444", fontFamily: "Heebo", fontWeight: 600 }}
               />
               {minAmount !== null && (
                 <ReferenceLine
                   y={minAmount}
-                  stroke="oklch(0.55 0.15 280)"
+                  stroke="#a855f7"
                   strokeDasharray="6 3"
                   strokeWidth={1.5}
-                  label={{ value: "מינימום", position: "insideTopLeft", fontSize: 10, fill: "oklch(0.55 0.15 280)", fontFamily: "Heebo", fontWeight: 600 }}
+                  label={{ value: "מינימום", position: "insideTopLeft", fontSize: 10, fill: "#a855f7", fontFamily: "Heebo", fontWeight: 600 }}
                 />
               )}
               {/* Critical Point Marker */}
@@ -492,14 +465,14 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
                   x={criticalPoint.date}
                   y={criticalPoint.onTheWay ?? criticalPoint.forecast ?? 0}
                   r={6}
-                  fill="oklch(0.62 0.19 25)"
+                  fill="#ef4444"
                   stroke="white"
                   strokeWidth={2}
                   label={{
                     value: "⚠ זמן להזמנה",
                     position: "top",
                     fontSize: 11,
-                    fill: "oklch(0.55 0.18 25)",
+                    fill: "#f87171",
                     fontFamily: "Heebo",
                     fontWeight: 700,
                     offset: 12,
@@ -510,36 +483,36 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
               <Area
                 type="monotone"
                 dataKey="quantity"
-                stroke="oklch(0.55 0.13 200)"
+                stroke="#3b82f6"
                 strokeWidth={2.5}
                 fill={`url(#gradient-actual-${sku})`}
-                connectNulls={false}
-                dot={{ r: 3, fill: "oklch(0.55 0.13 200)", strokeWidth: 0 }}
-                activeDot={{ r: 6, fill: "oklch(0.55 0.13 200)", stroke: "white", strokeWidth: 2 }}
+                connectNulls={true}
+                dot={{ r: 3, fill: "#3b82f6", strokeWidth: 0 }}
+                activeDot={{ r: 6, fill: "#3b82f6", stroke: "white", strokeWidth: 2 }}
               />
               {/* Forecast — softer dashed line, no dots */}
               <Area
                 type="monotone"
                 dataKey="forecast"
-                stroke="oklch(0.65 0.15 30)"
+                stroke="#f59e0b"
                 strokeWidth={2}
                 strokeDasharray="6 3"
                 fill={`url(#gradient-forecast-${sku})`}
                 connectNulls={true}
                 dot={false}
-                activeDot={{ r: 5, fill: "oklch(0.65 0.15 30)", stroke: "white", strokeWidth: 2 }}
+                activeDot={{ r: 5, fill: "#f59e0b", stroke: "white", strokeWidth: 2 }}
               />
               {/* On the way — subtle dashed line, no dots */}
               <Area
                 type="monotone"
                 dataKey="onTheWay"
-                stroke="oklch(0.55 0.15 280)"
+                stroke="#a855f7"
                 strokeWidth={1.5}
                 strokeDasharray="4 4"
                 fill={`url(#gradient-order-${sku})`}
                 connectNulls={true}
                 dot={false}
-                activeDot={{ r: 5, fill: "oklch(0.55 0.15 280)", stroke: "white", strokeWidth: 2 }}
+                activeDot={{ r: 5, fill: "#a855f7", stroke: "white", strokeWidth: 2 }}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -547,22 +520,22 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
         {/* Legend */}
         <div className="flex items-center justify-center gap-5 pb-4 pt-2 text-xs text-muted-foreground font-medium">
           <span className="flex items-center gap-1.5">
-            <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "oklch(0.55 0.13 200)" }} />
+            <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "#3b82f6" }} />
             מלאי בפועל
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "oklch(0.65 0.15 30)" }} />
+            <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "#f59e0b" }} />
             תחזית
           </span>
           {onTheWay > 0 && (
             <span className="flex items-center gap-1.5">
-              <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "oklch(0.55 0.15 280)" }} />
+              <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "#a855f7" }} />
               עם הזמנות
             </span>
           )}
           {minAmount !== null && (
             <span className="flex items-center gap-1.5">
-              <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "oklch(0.55 0.15 280)" }} />
+              <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: "#a855f7" }} />
               מינימום
             </span>
           )}

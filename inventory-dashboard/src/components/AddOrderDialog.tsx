@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Loader2, X, Package, Check, AlertCircle, Mail } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 function todayFormatted(): string {
   const d = new Date();
@@ -641,7 +641,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
 
   const defaultTrigger = (
     <Button variant="outline" size="sm" className="gap-2">
-      <Plus className="h-4 w-4" />
+      <span className="text-base"><MaterialIcon name="add" /></span>
       הוסף הזמנה
     </Button>
   );
@@ -665,8 +665,8 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
           <>
             {/* Context info from initialData or selected product */}
             {(contextStock !== undefined || contextOnTheWay !== undefined) && (
-              <div className="flex items-center gap-3 rounded-lg bg-muted/50 px-3 py-2 text-sm">
-                <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2 text-sm">
+                <span className="text-base text-muted-foreground shrink-0"><MaterialIcon name="inventory_2" /></span>
                 {contextStock !== undefined && (
                   <span>מלאי: <span className="font-semibold">{contextStock}</span></span>
                 )}
@@ -704,7 +704,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                     }}
                     placeholder="חפש לפי שם מוצר או מק״ט..."
                     readOnly={!!selectedProduct}
-                    className={selectedProduct ? "bg-muted/30 pe-9" : ""}
+                    className={selectedProduct ? "bg-white/5 pe-9" : ""}
                   />
                   {selectedProduct && (
                     <button
@@ -712,7 +712,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                       onClick={handleClearProduct}
                       className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted"
                     >
-                      <X className="h-4 w-4" />
+                      <span className="text-base"><MaterialIcon name="close" /></span>
                     </button>
                   )}
                   {showDropdown && filteredProducts.length > 0 && !selectedProduct && (
@@ -827,7 +827,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
               )}
               <Button type="submit" disabled={mutation.isPending} className="w-full">
                 {mutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-base animate-spin"><MaterialIcon name="progress_activity" /></span>
                 ) : (
                   "הוסף הזמנה"
                 )}
@@ -840,7 +840,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         {dialogPhase === "review" && (
           <div className="space-y-4">
             {/* Shared dates context */}
-            <div className="flex items-center gap-4 rounded-lg bg-muted/50 px-3 py-2 text-sm">
+            <div className="flex items-center gap-4 rounded-lg bg-white/5 px-3 py-2 text-sm">
               <span>תאריך הזמנה: <span className="font-semibold">{orderDate}</span></span>
               {expectedDate && (
                 <span>צפי הגעה: <span className="font-semibold">{expectedDate}</span></span>
@@ -890,7 +890,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                               <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">מקורי</span>
                             )}
                             {isLinkedChild && (
-                              <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded shrink-0">מקושר</span>
+                              <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded shrink-0">מקושר</span>
                             )}
                           </div>
                           <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5">
@@ -979,7 +979,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         {dialogPhase === "email" && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-base font-bold">
-              <Mail className="h-5 w-5 text-primary" />
+              <span className="text-lg text-primary"><MaterialIcon name="mail" /></span>
               שליחת מייל הזמנה לספק
             </div>
 
@@ -1000,7 +1000,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
               <div className="overflow-x-auto border border-border rounded-lg bg-background">
                 <table className="w-full text-[11px]" dir="rtl">
                   <thead>
-                    <tr className="bg-muted/50 border-b border-border">
+                    <tr className="bg-white/5 border-b border-border">
                       <th className="px-1.5 py-1 text-right font-medium">שם פריט</th>
                       <th className="px-1.5 py-1 text-right font-medium">מק״ט ספק</th>
                       <th className="px-1.5 py-1 text-right font-medium w-14">כמות</th>
@@ -1043,7 +1043,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
 
             <div className="flex gap-2">
               <Button className="flex-1" onClick={handleSendEmailAndSubmit}>
-                <Mail className="h-4 w-4 ml-2" />
+                <span className="text-base ml-2"><MaterialIcon name="mail" /></span>
                 אשר הזמנה ושלח מייל
               </Button>
               <Button variant="outline" onClick={handleSkipEmail}>
@@ -1063,9 +1063,9 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                   <div key={s.sku} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
                     <div className="shrink-0">
                       {s.status === "pending" && <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />}
-                      {s.status === "submitting" && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-                      {s.status === "success" && <Check className="h-4 w-4 text-green-600" />}
-                      {s.status === "error" && <AlertCircle className="h-4 w-4 text-destructive" />}
+                      {s.status === "submitting" && <span className="text-base animate-spin text-primary"><MaterialIcon name="progress_activity" /></span>}
+                      {s.status === "success" && <span className="text-base text-green-400"><MaterialIcon name="check" /></span>}
+                      {s.status === "error" && <span className="text-base text-destructive"><MaterialIcon name="warning" /></span>}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{item?.name ?? s.sku}</div>
@@ -1094,13 +1094,13 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
             {/* Email status */}
             {emailStatus !== "idle" && (
               <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
-                emailStatus === "sending" ? "bg-blue-50 text-blue-700" :
-                emailStatus === "sent" ? "bg-green-50 text-green-700" :
-                "bg-red-50 text-red-700"
+                emailStatus === "sending" ? "bg-blue-500/10 text-blue-400" :
+                emailStatus === "sent" ? "bg-green-500/10 text-green-400" :
+                "bg-red-500/10 text-red-400"
               }`}>
-                {emailStatus === "sending" && <Loader2 className="h-4 w-4 animate-spin" />}
-                {emailStatus === "sent" && <Mail className="h-4 w-4" />}
-                {emailStatus === "error" && <AlertCircle className="h-4 w-4" />}
+                {emailStatus === "sending" && <span className="text-base animate-spin"><MaterialIcon name="progress_activity" /></span>}
+                {emailStatus === "sent" && <span className="text-base"><MaterialIcon name="mail" /></span>}
+                {emailStatus === "error" && <span className="text-base"><MaterialIcon name="warning" /></span>}
                 <span>
                   {emailStatus === "sending" && "שולח מייל מרוכז לספק..."}
                   {emailStatus === "sent" && "מייל הזמנה נשלח בהצלחה"}

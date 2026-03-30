@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Loader2 } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 export function AddProductDialog() {
   const [open, setOpen] = useState(false);
@@ -39,7 +39,7 @@ export function AddProductDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
-          <Plus className="h-4 w-4" />
+          <span className="text-base"><MaterialIcon name="add" /></span>
           הוסף מוצר
         </Button>
       </DialogTrigger>
@@ -84,7 +84,7 @@ export function AddProductDialog() {
           )}
           <Button type="submit" disabled={mutation.isPending} className="w-full">
             {mutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-base animate-spin"><MaterialIcon name="progress_activity" /></span>
             ) : (
               "הוסף מוצר"
             )}

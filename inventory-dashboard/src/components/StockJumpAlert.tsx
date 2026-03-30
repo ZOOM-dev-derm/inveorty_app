@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { useStockJumpDetector } from "@/hooks/useStockJumpDetector";
 import { useArrivedFlags } from "@/hooks/useArrivedFlags";
-import { PackageCheck, X, ArrowUp } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 export function StockJumpAlert() {
   const { pendingMatches, dismiss, removeMatch } = useStockJumpDetector();
@@ -25,7 +25,7 @@ export function StockJumpAlert() {
       <DialogContent className="max-w-md" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <PackageCheck className="h-5 w-5 text-green-600" />
+            <span className="text-lg text-green-400"><MaterialIcon name="package_2" /></span>
             זוהתה קפיצת מלאי
           </DialogTitle>
         </DialogHeader>
@@ -34,8 +34,8 @@ export function StockJumpAlert() {
           <div className="font-medium text-base">{current.product.name}</div>
           <div className="text-muted-foreground">מק״ט: {current.product.sku}</div>
 
-          <div className="flex items-center gap-2 bg-green-50 dark:bg-green-950/30 rounded-lg p-3">
-            <ArrowUp className="h-4 w-4 text-green-600" />
+          <div className="flex items-center gap-2 bg-green-500/10 rounded-lg p-3">
+            <span className="text-base text-green-400"><MaterialIcon name="arrow_upward" /></span>
             <span>
               מלאי עלה מ-<strong>{current.oldStock}</strong> ל-<strong>{current.newStock}</strong>
               {" "}
@@ -57,11 +57,11 @@ export function StockJumpAlert() {
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={handleDismiss}>
-            <X className="h-4 w-4 ml-1" />
+            <span className="text-base ml-1"><MaterialIcon name="close" /></span>
             לא
           </Button>
           <Button onClick={handleConfirm}>
-            <PackageCheck className="h-4 w-4 ml-1" />
+            <span className="text-base ml-1"><MaterialIcon name="package_2" /></span>
             כן, הגיעה
           </Button>
         </DialogFooter>

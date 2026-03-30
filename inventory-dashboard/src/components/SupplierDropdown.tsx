@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import { ChevronDown, X } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 interface SupplierDropdownProps {
   suppliers: string[];
@@ -33,12 +33,14 @@ export function SupplierDropdown({ suppliers, value, onChange }: SupplierDropdow
       >
         <span>{value || "ספק"}</span>
         {value ? (
-          <X
-            className="h-3.5 w-3.5 hover:text-destructive"
+          <span
+            className="text-sm hover:text-destructive"
             onClick={(e) => { e.stopPropagation(); onChange(""); setOpen(false); }}
-          />
+          >
+            <MaterialIcon name="close" />
+          </span>
         ) : (
-          <ChevronDown className="h-3.5 w-3.5" />
+          <span className="text-sm"><MaterialIcon name="expand_more" /></span>
         )}
       </button>
       {open && suppliers.length > 0 && (
@@ -47,7 +49,7 @@ export function SupplierDropdown({ suppliers, value, onChange }: SupplierDropdow
             <button
               key={supplier}
               onClick={() => { onChange(supplier); setOpen(false); }}
-              className={`w-full text-right px-3 py-2 text-sm hover:bg-muted/50 transition-colors
+              className={`w-full text-right px-3 py-2 text-sm hover:bg-white/5 transition-colors
                 ${value === supplier ? "bg-primary/10 font-semibold" : ""}`}
             >
               {supplier}

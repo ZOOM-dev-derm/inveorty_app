@@ -5,6 +5,7 @@ import { OrdersPage } from "@/pages/OrdersPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { SupplierMessagesPage } from "@/pages/SupplierMessagesPage";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LoginPage } from "@/components/LoginPage";
 
 function AuthGate() {
@@ -28,9 +29,11 @@ function AuthGate() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AuthGate />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

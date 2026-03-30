@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Package, Loader2, AlertTriangle } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 export function LowStock() {
   const { data: items, isLoading, error } = useLowStockItems();
@@ -17,7 +17,7 @@ export function LowStock() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center gap-2">
-        <Package className="h-5 w-5 text-primary" />
+        <span className="text-xl text-primary"><MaterialIcon name="inventory_2" /></span>
         <CardTitle>מלאי נמוך</CardTitle>
         {!isLoading && (
           <Badge variant="outline" className="mr-auto">
@@ -28,7 +28,7 @@ export function LowStock() {
       <CardContent>
         {isLoading && (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <span className="text-2xl animate-spin text-muted-foreground"><MaterialIcon name="progress_activity" /></span>
           </div>
         )}
         {error && (
@@ -58,7 +58,7 @@ export function LowStock() {
                     <TableCell>{item.sku}</TableCell>
                     <TableCell>
                       <span className="flex items-center gap-1 text-destructive font-bold">
-                        <AlertTriangle className="h-3.5 w-3.5" />
+                        <MaterialIcon name="warning" className="text-sm" />
                         {item.quantity}
                       </span>
                     </TableCell>

@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 interface SearchInputProps {
   value: string;
@@ -9,7 +9,7 @@ interface SearchInputProps {
 export function SearchInput({ value, onChange, placeholder = "חפש..." }: SearchInputProps) {
   return (
     <div className="relative w-full max-w-sm">
-      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted-foreground"><MaterialIcon name="search" /></span>
       <input
         type="text"
         placeholder={placeholder}
