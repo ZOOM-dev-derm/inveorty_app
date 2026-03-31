@@ -3,13 +3,22 @@ import { fetchUnreadEmailsWithAttachments, markAsRead } from "../lib/gmail.js";
 import { parseComaxReport } from "../lib/comax-parser.js";
 import { AppsScriptWriter } from "../lib/sheets-writer.js";
 
-const COMAX_QUERY =
-  "from:ComaxNotification_Do_Not_Reply@comax.co.il is:unread";
-
 function todayDateString(): string {
   return new Date().toLocaleDateString("en-GB", {
     timeZone: "Asia/Jerusalem",
   });
+}
+
+/** Gmail date filter: only match emails from today (Asia/Jerusalem) */
+function comaxQuery(): string {
+  const now = new Date();
+  const ilDate = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Jerusalem" })
+  );
+  const yyyy = ilDate.getFullYear();
+  const mm = String(ilDate.getMonth() + 1).padStart(2, "0");
+  const dd = String(ilDate.getDate()).padStart(2, "0");
+  return `from:ComaxNotification_Do_Not_Reply@comax.co.il is:unread after:${yyyy}/${mm}/${dd}`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -19,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const emails = await fetchUnreadEmailsWithAttachments(COMAX_QUERY);
+    const emails = await fetchUnreadEmailsWithAttachments(comaxQuery());
     if (emails.length === 0) {
       return res
         .status(200)
