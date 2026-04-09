@@ -241,12 +241,13 @@ export async function fetchSupplierMessages(): Promise<SupplierMessage[]> {
 // ── Write operations ──
 
 const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL;
+const EMAIL_SCRIPT_URL = import.meta.env.VITE_EMAIL_SCRIPT_URL;
 
-async function postToSheet(action: string, data?: Record<string, unknown>): Promise<{ success: boolean; error?: string; added?: number }> {
-  if (!APPS_SCRIPT_URL) {
-    throw new Error("VITE_APPS_SCRIPT_URL is not configured");
+async function postToScript(url: string, action: string, data?: Record<string, unknown>): Promise<{ success: boolean; error?: string; added?: number; count?: number }> {
+  if (!url) {
+    throw new Error("Script URL is not configured");
   }
-  const res = await fetch(APPS_SCRIPT_URL, {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify({ action, data }),
@@ -259,6 +260,14 @@ async function postToSheet(action: string, data?: Record<string, unknown>): Prom
     throw new Error(json.error || "Unknown error");
   }
   return json;
+}
+
+async function postToSheet(action: string, data?: Record<string, unknown>) {
+  return postToScript(APPS_SCRIPT_URL, action, data);
+}
+
+async function postToEmailScript(action: string, data?: Record<string, unknown>) {
+  return postToScript(EMAIL_SCRIPT_URL || APPS_SCRIPT_URL, action, data);
 }
 
 export async function addProduct(data: { name: string; sku: string; manufacturer?: string }) {
@@ -309,7 +318,11 @@ export async function sendFollowUp(data: {
   container?: string;
   customMessage?: string;
 }) {
-  return postToSheet("sendFollowUp", data);
+  return postToEmailScript("sendFollowUp", data);
+}
+
+export async function sendFreeEmail(data: { subject: string; body: string }) {
+  return postToEmailScript("sendFreeEmail", data);
 }
 
 export async function sendDailyOrderEmail(
@@ -317,11 +330,15 @@ export async function sendDailyOrderEmail(
   customMessage?: string,
   editedRows?: { name: string; sku: string; supplierSku: string; quantity: string; container: string; distributionNotes: string; formula: string; content: string }[]
 ) {
-  return postToSheet("sendDailyOrderEmail", { orderDate, customMessage, editedRows });
+  return postToEmailScript("sendDailyOrderEmail", { orderDate, customMessage, editedRows });
 }
 
 export async function updateOrderFields(rowIndex: number, fields: Record<string, string>, replaceComments?: string) {
   return postToSheet("updateOrderFields", { rowIndex, fields, replaceComments });
+}
+
+export async function deleteOrder(rowIndex: number) {
+  return postToSheet("deleteOrder", { rowIndex });
 }
 
 export async function linkSupplierMessage(data: {

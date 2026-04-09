@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { fetchProducts, fetchOrders, fetchHistory, fetchConnectedProducts, fetchSupplierMessages, addProduct, addOrder, updateOrderStatus, updateOrderComments, updateOrderFields, syncMissingProducts, syncSupplierSkus, sendFollowUp, linkSupplierMessage } from "@/services/googleSheets";
+import { fetchProducts, fetchOrders, fetchHistory, fetchConnectedProducts, fetchSupplierMessages, addProduct, addOrder, updateOrderStatus, updateOrderComments, updateOrderFields, deleteOrder, syncMissingProducts, syncSupplierSkus, sendFollowUp, sendFreeEmail, linkSupplierMessage } from "@/services/googleSheets";
 import type { Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint, ConnectedProduct, SupplierMessage } from "@/types";
 
 const FIVE_MINUTES = 5 * 60 * 1000;
@@ -506,6 +506,18 @@ export function useUpdateOrderFields() {
   });
 }
 
+export function useDeleteOrder() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { rowIndex: number }) => deleteOrder(data.rowIndex),
+    onSuccess: () => {
+      setTimeout(() => {
+        client.invalidateQueries({ queryKey: ["orders"] });
+      }, 5000);
+    },
+  });
+}
+
 export function useSyncMissingProducts() {
   const client = useQueryClient();
   return useMutation({
@@ -535,6 +547,12 @@ export function useSendFollowUp() {
         client.invalidateQueries({ queryKey: ["orders"] });
       }, 5000);
     },
+  });
+}
+
+export function useSendFreeEmail() {
+  return useMutation({
+    mutationFn: (data: { subject: string; body: string }) => sendFreeEmail(data),
   });
 }
 
