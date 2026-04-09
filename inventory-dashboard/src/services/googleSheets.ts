@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-import type { Product, Order, HistoryItem, ConnectedProduct, SupplierMessage } from "@/types";
+import type { Product, Order, HistoryItem, ConnectedProduct, SupplierMessage, SupplierEmail } from "@/types";
 
 const SHEET_ID = import.meta.env.VITE_SHEET_ID;
 const ORDERS_GID = import.meta.env.VITE_ORDERS_GID;
@@ -323,6 +323,12 @@ export async function sendFollowUp(data: {
 
 export async function sendFreeEmail(data: { subject: string; body: string }) {
   return postToEmailScript("sendFreeEmail", data);
+}
+
+export async function fetchSupplierEmailHistory(): Promise<SupplierEmail[]> {
+  const res = await fetch("/api/supplier-emails");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 
 export async function sendDailyOrderEmail(

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { fetchProducts, fetchOrders, fetchHistory, fetchConnectedProducts, fetchSupplierMessages, addProduct, addOrder, updateOrderStatus, updateOrderComments, updateOrderFields, deleteOrder, syncMissingProducts, syncSupplierSkus, sendFollowUp, sendFreeEmail, linkSupplierMessage } from "@/services/googleSheets";
-import type { Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint, ConnectedProduct, SupplierMessage } from "@/types";
+import { fetchProducts, fetchOrders, fetchHistory, fetchConnectedProducts, fetchSupplierMessages, fetchSupplierEmailHistory, addProduct, addOrder, updateOrderStatus, updateOrderComments, updateOrderFields, deleteOrder, syncMissingProducts, syncSupplierSkus, sendFollowUp, sendFreeEmail, linkSupplierMessage } from "@/services/googleSheets";
+import type { Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint, ConnectedProduct, SupplierMessage, SupplierEmail } from "@/types";
 
 const FIVE_MINUTES = 5 * 60 * 1000;
 const TEN_MINUTES = 10 * 60 * 1000;
@@ -547,6 +547,14 @@ export function useSendFollowUp() {
         client.invalidateQueries({ queryKey: ["orders"] });
       }, 5000);
     },
+  });
+}
+
+export function useSupplierEmailHistory() {
+  return useQuery<SupplierEmail[]>({
+    queryKey: ["supplierEmailHistory"],
+    queryFn: fetchSupplierEmailHistory,
+    refetchInterval: FIVE_MINUTES,
   });
 }
 

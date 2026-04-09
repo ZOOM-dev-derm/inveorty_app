@@ -67,6 +67,16 @@ export interface SupplierMessage {
   rowIndex: number;       // row in supplier-messages sheet
 }
 
+export interface SupplierEmail {
+  id: string;
+  threadId: string;
+  subject: string;
+  date: string;
+  direction: "incoming" | "outgoing";
+  body: string;
+  orderTag: string | null;
+}
+
 export interface ForecastPoint {
   date: string;
   quantity: number | null;
