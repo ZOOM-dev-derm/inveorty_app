@@ -77,6 +77,19 @@ export interface SupplierEmail {
   orderTag: string | null;
 }
 
+export interface EmailThread {
+  threadId: string;
+  emails: SupplierEmail[];
+  subject: string;
+  latestDate: string;
+  messageCount: number;
+  orderTag: string | null;
+  hasIncoming: boolean;
+  hasOutgoing: boolean;
+  latestDirection: "incoming" | "outgoing";
+  latestBody: string;
+}
+
 export interface ForecastPoint {
   date: string;
   quantity: number | null;

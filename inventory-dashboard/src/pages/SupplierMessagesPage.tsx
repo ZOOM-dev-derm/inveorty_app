@@ -27,20 +27,100 @@ import {
   useSendFreeEmail,
   useUpdateOrderComments,
 } from "@/hooks/useSheetData";
-import type { SupplierMessage, SupplierEmail, Order } from "@/types";
+import type { SupplierMessage, SupplierEmail, Order, EmailThread } from "@/types";
 import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 type Tab = "history" | "pending" | "handled";
-type ViewMode = "chrono" | "byOrder";
+type ViewMode = "threads" | "byOrder";
+
+// ── Helpers ──
+
+function buildThreads(emails: SupplierEmail[]): EmailThread[] {
+  const map = new Map<string, SupplierEmail[]>();
+  for (const email of emails) {
+    const key = email.threadId || email.id;
+    const list = map.get(key) ?? [];
+    list.push(email);
+    map.set(key, list);
+  }
+
+  const threads: EmailThread[] = [];
+  for (const [threadId, threadEmails] of map) {
+    threadEmails.sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    const first = threadEmails[0];
+    const last = threadEmails[threadEmails.length - 1];
+    const orderTag = threadEmails.find((e) => e.orderTag)?.orderTag ?? null;
+
+    let subject = first.subject;
+    if (orderTag) subject = subject.replace(orderTag, "").trim();
+    subject = subject.replace(/^(Re|Fwd|fw|השב|העבר):\s*/i, "").trim();
+
+    threads.push({
+      threadId,
+      emails: threadEmails,
+      subject: subject || "(ללא נושא)",
+      latestDate: last.date,
+      messageCount: threadEmails.length,
+      orderTag,
+      hasIncoming: threadEmails.some((e) => e.direction === "incoming"),
+      hasOutgoing: threadEmails.some((e) => e.direction === "outgoing"),
+      latestDirection: last.direction,
+      latestBody: last.body,
+    });
+  }
+
+  threads.sort(
+    (a, b) =>
+      new Date(b.latestDate).getTime() - new Date(a.latestDate).getTime()
+  );
+  return threads;
+}
+
+function formatDate(isoDate: string): string {
+  if (!isoDate) return "";
+  const d = new Date(isoDate);
+  if (isNaN(d.getTime())) return isoDate;
+  return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
+    .toString()
+    .padStart(2, "0")}/${d.getFullYear()} ${d
+    .getHours()
+    .toString()
+    .padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+}
+
+function formatShortDate(isoDate: string): string {
+  if (!isoDate) return "";
+  const d = new Date(isoDate);
+  if (isNaN(d.getTime())) return isoDate;
+  return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+function isSameDay(date1: string, date2: string): boolean {
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  );
+}
+
+// ── Main Page ──
 
 export function SupplierMessagesPage() {
   const { data: messages, isLoading: msgsLoading } = useSupplierMessages();
-  const { data: emailHistory, isLoading: emailsLoading } = useSupplierEmailHistory();
+  const { data: emailHistory, isLoading: emailsLoading } =
+    useSupplierEmailHistory();
   const { data: openOrders } = useOpenOrders();
   const [tab, setTab] = useState<Tab>("history");
   const [supplierFilter, setSupplierFilter] = useState("פאר פארם");
   const [showComposeDialog, setShowComposeDialog] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("chrono");
+  const [viewMode, setViewMode] = useState<ViewMode>("threads");
 
   const pending = messages?.filter((m) => m.handled !== "כן") ?? [];
   const handled = messages?.filter((m) => m.handled === "כן") ?? [];
@@ -54,7 +134,11 @@ export function SupplierMessagesPage() {
         badge={pending.length > 0 ? pending.length : undefined}
         actions={
           <>
-            <Select value={supplierFilter} onValueChange={setSupplierFilter} dir="rtl">
+            <Select
+              value={supplierFilter}
+              onValueChange={setSupplierFilter}
+              dir="rtl"
+            >
               <SelectTrigger className="w-[140px]" size="sm">
                 <SelectValue />
               </SelectTrigger>
@@ -64,7 +148,9 @@ export function SupplierMessagesPage() {
               </SelectContent>
             </Select>
             <Button size="sm" onClick={() => setShowComposeDialog(true)}>
-              <span className="text-base ml-1"><MaterialIcon name="edit" /></span>
+              <span className="text-base ml-1">
+                <MaterialIcon name="edit" />
+              </span>
               הודעה חדשה
             </Button>
           </>
@@ -78,7 +164,9 @@ export function SupplierMessagesPage() {
           size="sm"
           onClick={() => setTab("history")}
         >
-          <span className="text-base ml-1.5"><MaterialIcon name="forum" /></span>
+          <span className="text-base ml-1.5">
+            <MaterialIcon name="forum" />
+          </span>
           כל ההודעות
         </Button>
         <Button
@@ -86,7 +174,9 @@ export function SupplierMessagesPage() {
           size="sm"
           onClick={() => setTab("pending")}
         >
-          <span className="text-base ml-1.5"><MaterialIcon name="schedule" /></span>
+          <span className="text-base ml-1.5">
+            <MaterialIcon name="schedule" />
+          </span>
           ממתינים
           {pending.length > 0 && (
             <Badge variant="secondary" className="mr-1.5 text-xs">
@@ -99,7 +189,9 @@ export function SupplierMessagesPage() {
           size="sm"
           onClick={() => setTab("handled")}
         >
-          <span className="text-base ml-1.5"><MaterialIcon name="check_circle" /></span>
+          <span className="text-base ml-1.5">
+            <MaterialIcon name="check_circle" />
+          </span>
           טופלו
         </Button>
       </div>
@@ -108,13 +200,15 @@ export function SupplierMessagesPage() {
       {tab === "history" && (
         <div className="flex gap-2 mb-4">
           <Button
-            variant={viewMode === "chrono" ? "default" : "outline"}
+            variant={viewMode === "threads" ? "default" : "outline"}
             size="sm"
             className="h-7 text-xs"
-            onClick={() => setViewMode("chrono")}
+            onClick={() => setViewMode("threads")}
           >
-            <span className="text-sm ml-1"><MaterialIcon name="schedule" /></span>
-            כרונולוגי
+            <span className="text-sm ml-1">
+              <MaterialIcon name="forum" />
+            </span>
+            שיחות
           </Button>
           <Button
             variant={viewMode === "byOrder" ? "default" : "outline"}
@@ -122,7 +216,9 @@ export function SupplierMessagesPage() {
             className="h-7 text-xs"
             onClick={() => setViewMode("byOrder")}
           >
-            <span className="text-sm ml-1"><MaterialIcon name="inventory_2" /></span>
+            <span className="text-sm ml-1">
+              <MaterialIcon name="inventory_2" />
+            </span>
             לפי הזמנה
           </Button>
         </div>
@@ -130,7 +226,9 @@ export function SupplierMessagesPage() {
 
       {isLoading && (
         <div className="flex items-center justify-center py-12 text-muted-foreground">
-          <span className="text-lg animate-spin ml-2"><MaterialIcon name="progress_activity" /></span>
+          <span className="text-lg animate-spin ml-2">
+            <MaterialIcon name="progress_activity" />
+          </span>
           טוען הודעות...
         </div>
       )}
@@ -145,7 +243,9 @@ export function SupplierMessagesPage() {
         <>
           {(tab === "pending" ? pending : handled).length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
-              {tab === "pending" ? "אין הודעות ממתינות" : "אין הודעות שטופלו"}
+              {tab === "pending"
+                ? "אין הודעות ממתינות"
+                : "אין הודעות שטופלו"}
             </div>
           )}
           <div className="space-y-3">
@@ -187,22 +287,197 @@ function EmailHistoryView({
     );
   }
 
-  if (viewMode === "chrono") {
-    return (
-      <div className="space-y-3">
-        {emails.map((email) => (
-          <EmailCard key={email.id} email={email} />
-        ))}
-      </div>
-    );
+  if (viewMode === "threads") {
+    return <ThreadedView emails={emails} />;
   }
 
-  // Group by order tag
   return <GroupedByOrderView emails={emails} />;
 }
 
+// ── Threaded View ──
+
+function ThreadedView({ emails }: { emails: SupplierEmail[] }) {
+  const threads = useMemo(() => buildThreads(emails), [emails]);
+  const [expandedThreadId, setExpandedThreadId] = useState<string | null>(null);
+
+  const toggleThread = (threadId: string) => {
+    setExpandedThreadId((prev) => (prev === threadId ? null : threadId));
+  };
+
+  return (
+    <div className="space-y-3">
+      {threads.map((thread) => (
+        <ThreadCard
+          key={thread.threadId}
+          thread={thread}
+          expanded={expandedThreadId === thread.threadId}
+          onToggle={() => toggleThread(thread.threadId)}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Thread Card ──
+
+function ThreadCard({
+  thread,
+  expanded,
+  onToggle,
+}: {
+  thread: EmailThread;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const dateDisplay = useMemo(() => {
+    if (thread.messageCount === 1) {
+      return formatDate(thread.latestDate);
+    }
+    const first = thread.emails[0];
+    const last = thread.emails[thread.emails.length - 1];
+    return `${formatShortDate(first.date)} - ${formatShortDate(last.date)}`;
+  }, [thread.messageCount, thread.latestDate, thread.emails]);
+
+  return (
+    <Card className="overflow-hidden">
+      <div
+        className="cursor-pointer hover:bg-accent/50 transition-colors py-3 px-4"
+        onClick={onToggle}
+      >
+        <div className="flex flex-col gap-2">
+          {/* Top row: direction dots + subject + date + chevron */}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1 shrink-0">
+              {thread.hasIncoming && (
+                <span
+                  className="w-2 h-2 rounded-full bg-green-400"
+                  title="התקבל"
+                />
+              )}
+              {thread.hasOutgoing && (
+                <span
+                  className="w-2 h-2 rounded-full bg-blue-400"
+                  title="נשלח"
+                />
+              )}
+            </div>
+
+            <span className="text-sm font-medium leading-snug flex-1 min-w-0 truncate">
+              {thread.subject}
+            </span>
+
+            <span className="text-xs text-muted-foreground shrink-0">
+              {dateDisplay}
+            </span>
+
+            <span
+              className={`text-sm text-muted-foreground transition-transform duration-300 ${
+                expanded ? "rotate-180" : ""
+              }`}
+            >
+              <MaterialIcon name="expand_more" />
+            </span>
+          </div>
+
+          {/* Second row: tags + count + preview */}
+          <div className="flex items-center gap-2">
+            {thread.orderTag && (
+              <Badge variant="outline" className="text-[10px] shrink-0">
+                {thread.orderTag}
+              </Badge>
+            )}
+            {thread.messageCount > 1 && (
+              <Badge variant="secondary" className="text-[10px] shrink-0">
+                {thread.messageCount} הודעות
+              </Badge>
+            )}
+            {!expanded && thread.latestBody && (
+              <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
+                {thread.latestBody.slice(0, 120)}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded conversation */}
+      {expanded && <ThreadConversation emails={thread.emails} />}
+    </Card>
+  );
+}
+
+// ── Thread Conversation ──
+
+function ThreadConversation({ emails }: { emails: SupplierEmail[] }) {
+  return (
+    <div className="border-t border-border/30 px-4 py-3 space-y-2">
+      {emails.map((email, idx) => (
+        <div key={email.id}>
+          {idx > 0 && !isSameDay(emails[idx - 1].date, email.date) && (
+            <DateSeparator date={email.date} />
+          )}
+          <ThreadBubble email={email} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Thread Bubble ──
+
+function ThreadBubble({ email }: { email: SupplierEmail }) {
+  const isIncoming = email.direction === "incoming";
+
+  return (
+    <div
+      className={`rounded-lg py-2 px-3 border-r-[3px] ${
+        isIncoming
+          ? "border-r-green-400 bg-green-500/5"
+          : "border-r-blue-400 bg-blue-500/5"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <Badge
+          variant="secondary"
+          className={`text-[10px] shrink-0 ${
+            isIncoming
+              ? "bg-green-500/10 text-green-400"
+              : "bg-blue-500/10 text-blue-400"
+          }`}
+        >
+          {isIncoming ? "התקבל" : "נשלח"}
+        </Badge>
+        <span className="text-xs text-muted-foreground">
+          {formatDate(email.date)}
+        </span>
+      </div>
+      {email.body && (
+        <div className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+          {email.body}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Date Separator ──
+
+function DateSeparator({ date }: { date: string }) {
+  return (
+    <div className="flex items-center gap-3 py-2">
+      <div className="flex-1 border-t border-border/30" />
+      <span className="text-[10px] text-muted-foreground">
+        {formatShortDate(date)}
+      </span>
+      <div className="flex-1 border-t border-border/30" />
+    </div>
+  );
+}
+
+// ── Grouped By Order View (with threads) ──
+
 function GroupedByOrderView({ emails }: { emails: SupplierEmail[] }) {
-  const groups = useMemo(() => {
+  const groupsWithThreads = useMemo(() => {
     const map = new Map<string, SupplierEmail[]>();
     for (const email of emails) {
       const key = email.orderTag || "כללי";
@@ -210,18 +485,23 @@ function GroupedByOrderView({ emails }: { emails: SupplierEmail[] }) {
       list.push(email);
       map.set(key, list);
     }
-    // Sort groups: tagged first (by tag), "כללי" last
     const entries = Array.from(map.entries()).sort((a, b) => {
       if (a[0] === "כללי") return 1;
       if (b[0] === "כללי") return -1;
       return a[0].localeCompare(b[0]);
     });
-    return entries;
+    return entries.map(([tag, tagEmails]) => ({
+      tag,
+      emailCount: tagEmails.length,
+      threads: buildThreads(tagEmails),
+    }));
   }, [emails]);
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
-    () => new Set(groups.map(([key]) => key))
+    () => new Set(groupsWithThreads.map((g) => g.tag))
   );
+
+  const [expandedThreadId, setExpandedThreadId] = useState<string | null>(null);
 
   const toggleGroup = (key: string) => {
     setExpandedGroups((prev) => {
@@ -232,103 +512,47 @@ function GroupedByOrderView({ emails }: { emails: SupplierEmail[] }) {
     });
   };
 
+  const toggleThread = (threadId: string) => {
+    setExpandedThreadId((prev) => (prev === threadId ? null : threadId));
+  };
+
   return (
     <div className="space-y-4">
-      {groups.map(([tag, tagEmails]) => (
+      {groupsWithThreads.map(({ tag, emailCount, threads }) => (
         <div key={tag}>
           <button
             className="flex items-center gap-2 mb-2 w-full text-right"
             onClick={() => toggleGroup(tag)}
           >
             <span className="text-sm text-muted-foreground">
-              <MaterialIcon name={expandedGroups.has(tag) ? "expand_more" : "chevron_left"} />
+              <MaterialIcon
+                name={
+                  expandedGroups.has(tag) ? "expand_more" : "chevron_left"
+                }
+              />
             </span>
             <Badge variant="outline" className="text-xs">
               {tag}
             </Badge>
             <span className="text-xs text-muted-foreground">
-              ({tagEmails.length})
+              ({emailCount})
             </span>
           </button>
           {expandedGroups.has(tag) && (
             <div className="space-y-2 pr-4">
-              {tagEmails.map((email) => (
-                <EmailCard key={email.id} email={email} />
+              {threads.map((thread) => (
+                <ThreadCard
+                  key={thread.threadId}
+                  thread={thread}
+                  expanded={expandedThreadId === thread.threadId}
+                  onToggle={() => toggleThread(thread.threadId)}
+                />
               ))}
             </div>
           )}
         </div>
       ))}
     </div>
-  );
-}
-
-// ── Email Card ──
-
-function EmailCard({ email }: { email: SupplierEmail }) {
-  const [expanded, setExpanded] = useState(false);
-  const isIncoming = email.direction === "incoming";
-
-  const formattedDate = useMemo(() => {
-    if (!email.date) return "";
-    const d = new Date(email.date);
-    if (isNaN(d.getTime())) return email.date;
-    return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
-  }, [email.date]);
-
-  // Clean subject: remove the order tag for display since it's shown as a badge
-  const cleanSubject = email.orderTag
-    ? email.subject.replace(email.orderTag, "").trim()
-    : email.subject;
-
-  return (
-    <Card
-      className="cursor-pointer hover:bg-accent/50 transition-colors"
-      onClick={() => setExpanded((v) => !v)}
-    >
-      <CardContent className="py-3 px-4">
-        <div className="flex flex-col gap-2">
-          {/* Top row */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge
-              variant="secondary"
-              className={`text-[10px] shrink-0 ${
-                isIncoming
-                  ? "bg-green-500/10 text-green-400"
-                  : "bg-blue-500/10 text-blue-400"
-              }`}
-            >
-              {isIncoming ? "התקבל" : "נשלח"}
-            </Badge>
-            <span className="text-xs text-muted-foreground shrink-0">
-              {formattedDate}
-            </span>
-            {email.orderTag && (
-              <Badge variant="outline" className="text-[10px] shrink-0">
-                {email.orderTag}
-              </Badge>
-            )}
-          </div>
-
-          {/* Subject */}
-          <div className="text-sm font-medium leading-snug">
-            {cleanSubject || "(ללא נושא)"}
-          </div>
-
-          {/* Body preview / expanded */}
-          {expanded && email.body && (
-            <div className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed mt-1 border-t border-border/20 pt-2">
-              {email.body}
-            </div>
-          )}
-          {!expanded && email.body && (
-            <div className="text-xs text-muted-foreground truncate">
-              {email.body.slice(0, 120)}
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
