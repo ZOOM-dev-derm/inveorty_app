@@ -747,7 +747,7 @@ export function useInventoryOverview() {
         currentStock: product.warehouseQty,
         onTheWay: onTheWayMap.get(product.sku) ?? 0,
       }))
-      .filter((item) => item.currentStock > 0 || item.onTheWay > 0);
+      .filter((item) => item.currentStock !== 0 || item.onTheWay > 0);
   }
 
   return { data: items, isLoading, error };

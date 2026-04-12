@@ -84,7 +84,7 @@ export function ProductsPage() {
         continue;
       }
       const dailyUsage = product.minAmount / 180;
-      map.set(item.sku, Math.round(item.currentStock / dailyUsage));
+      map.set(item.sku, Math.max(0, Math.round(item.currentStock / dailyUsage)));
     }
     return map;
   }, [items, products]);
@@ -147,7 +147,7 @@ export function ProductsPage() {
   const handleRowClick = (sku: string) =>
     setPinnedSku(prev => prev === sku ? null : sku);
 
-  const totalStock = items?.reduce((sum, i) => sum + i.currentStock, 0) ?? 0;
+  const totalStock = items?.reduce((sum, i) => sum + Math.max(0, i.currentStock), 0) ?? 0;
   const productsOnTheWay = items?.filter((i) => i.onTheWay > 0).length ?? 0;
 
   return (
@@ -279,14 +279,14 @@ export function ProductsPage() {
                     {/* Stock count — centered */}
                     <div className="col-span-2 text-center">
                       <span className={`text-xl font-bold font-display ${
-                        days != null && days <= 30 ? "text-destructive" : "text-foreground"
+                        item.currentStock <= 0 ? "text-destructive" : days != null && days <= 30 ? "text-destructive" : "text-foreground"
                       }`}>
-                        {item.currentStock}
+                        {Math.max(0, item.currentStock)}
                       </span>
                       <span className={`block text-[9px] uppercase tracking-widest ${
-                        days != null && days <= 30 ? "text-destructive font-bold" : "text-muted-foreground"
+                        item.currentStock <= 0 ? "text-destructive font-bold" : days != null && days <= 30 ? "text-destructive font-bold" : "text-muted-foreground"
                       }`}>
-                        {days != null && days <= 30 ? "חוסר במלאי" : "יחידות"}
+                        {item.currentStock <= 0 ? "אזל מהמלאי" : days != null && days <= 30 ? "חוסר במלאי" : "יחידות"}
                       </span>
                     </div>
 
@@ -312,7 +312,7 @@ export function ProductsPage() {
                       )}
                       {days != null && (
                         <p className={`text-xs ${days <= 30 ? "text-destructive font-bold" : "text-muted-foreground"}`}>
-                          צפי לסיום סחורה: {days} ימים
+                          {item.currentStock <= 0 ? "אזל מהמלאי" : `צפי לסיום סחורה: ${days} ימים`}
                         </p>
                       )}
                     </div>
@@ -332,7 +332,7 @@ export function ProductsPage() {
                     <ProductGraph
                       sku={item.sku}
                       productName={item.productName}
-                      currentStock={item.currentStock}
+                      currentStock={Math.max(0, item.currentStock)}
                       onTheWay={item.onTheWay}
                       onOrdersClick={handleNavigateToOrders}
                       supplierSku={peerFarmSku}
