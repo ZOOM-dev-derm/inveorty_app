@@ -207,7 +207,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
             <Button
               variant="outline"
               size="sm"
-              className="h-8 px-3 text-[11px] gap-1.5 rounded-full bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
+              className="h-8 px-3 text-[11px] gap-1.5 rounded-full bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 dark:hover:bg-emerald-500/20"
               disabled={statusMutation.isPending}
               title="סמן כהתקבל"
               onClick={(e) => {
@@ -229,7 +229,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
           <Button
             variant="outline"
             size="sm"
-            className={`h-8 px-3 text-[11px] gap-1.5 rounded-full ${hasComments ? "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100" : "bg-blue-50/50 text-blue-500 border-blue-100 hover:bg-blue-50"} ${showComments ? "ring-2 ring-blue-200" : ""}`}
+            className={`h-8 px-3 text-[11px] gap-1.5 rounded-full ${hasComments ? "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/25 dark:hover:bg-blue-500/25" : "bg-blue-50/50 text-blue-500 border-blue-100 hover:bg-blue-50 dark:bg-blue-500/5 dark:text-blue-400 dark:border-blue-500/15 dark:hover:bg-blue-500/15"} ${showComments ? "ring-2 ring-blue-200 dark:ring-blue-500/30" : ""}`}
             title="הצג/הוסף הערות"
             onClick={(e) => {
               e.stopPropagation();
@@ -239,7 +239,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
             <span className="text-sm"><MaterialIcon name="chat" /></span>
             הערות
             {hasComments && (
-              <Badge variant="secondary" className="h-4 px-1 text-[9px] mr-0.5 bg-blue-100 text-blue-600">
+              <Badge variant="secondary" className="h-4 px-1 text-[9px] mr-0.5 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400">
                 {commentEntries.length}
               </Badge>
             )}
@@ -247,7 +247,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
           <Button
             variant="outline"
             size="sm"
-            className={`h-8 px-3 text-[11px] gap-1.5 rounded-full ${followUpSent ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100"}`}
+            className={`h-8 px-3 text-[11px] gap-1.5 rounded-full ${followUpSent ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20" : "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 dark:hover:bg-amber-500/20"}`}
             disabled={followUpMutation.isPending}
             title="שלח מייל מעקב לספק"
             onClick={(e) => {
@@ -268,7 +268,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
           <Button
             variant="outline"
             size="sm"
-            className="h-8 px-3 text-[11px] gap-1.5 rounded-full bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+            className="h-8 px-3 text-[11px] gap-1.5 rounded-full bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 dark:bg-white/5 dark:text-gray-400 dark:border-white/10 dark:hover:bg-white/10"
             title="ערוך הזמנה"
             onClick={(e) => {
               e.stopPropagation();
@@ -632,7 +632,7 @@ function OrderGroupCard({ group, mode, skuNameMap, arrivedFlags, onRemoveArrived
 
   return (
     <div
-      className={`px-6 md:px-8 py-5 transition-colors ${group.hasOverdue ? "bg-red-50/80" : "bg-white/90 hover:bg-white"}`}
+      className={`px-6 md:px-8 py-5 transition-colors ${group.hasOverdue ? "bg-red-50/80 dark:bg-red-950/20" : "bg-white/90 hover:bg-white dark:bg-transparent dark:hover:bg-white/5"}`}
     >
       {/* Header — always visible, tappable */}
       <div
