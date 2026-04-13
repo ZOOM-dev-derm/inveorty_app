@@ -183,17 +183,11 @@ export function useProductForecast(sku: string, currentStock: number) {
       // - onTheWay: decline + order arrivals (shows spikes)
       const forecastStart = today > lastDate ? today : lastDate;
 
-      // Add overdue orders to starting quantity (both lines start here)
-      let overdueQty = 0;
-      for (const order of skuOrders) {
-        if (order.expectedDate! <= forecastStart) {
-          overdueQty += order.qty;
-          console.debug(`[Forecast] SKU ${sku}: adding overdue order qty ${order.qty} (expected ${order.expectedDate!.toISOString().slice(0, 10)})`);
-        }
-      }
-      const startQty = currentStock + overdueQty;
+      // Start from actual warehouse stock — don't add overdue order quantities,
+      // as warehouseQty from the sheet already reflects what's actually in stock.
+      const startQty = currentStock;
 
-      // Update the transition point at today to reflect overdue orders
+      // Update the transition point at today
       const todayLabel = formatDateShort(today);
       const todayPoint = chartData.find((p) => p.date === todayLabel && p.forecast !== null);
       if (todayPoint) {
@@ -269,16 +263,10 @@ export function useProductForecast(sku: string, currentStock: number) {
         .sort((a, b) => a.expectedDate!.getTime() - b.expectedDate!.getTime());
 
       // Generate 26 forecast points at 7-day (weekly) intervals
-      // Add overdue orders to starting quantity
-      let overdueQty = 0;
-      for (const order of skuOrders) {
-        if (order.expectedDate! <= today) {
-          overdueQty += order.qty;
-        }
-      }
-      const startQty = currentStock + overdueQty;
+      // Start from actual warehouse stock (source of truth)
+      const startQty = currentStock;
 
-      // Update starting point to reflect overdue orders
+      // Update starting point
       if (chartData.length > 0) {
         chartData[chartData.length - 1].forecast = startQty;
         if (skuOrders.length > 0) {
@@ -382,12 +370,10 @@ export function useCriticalDates(items: InventoryOverviewItem[]) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Add overdue orders to starting quantity
-      let overdueQty = 0;
-      for (const order of skuOrders) {
-        if (order.expectedDate! <= today) overdueQty += order.qty;
-      }
-      let running = item.currentStock + overdueQty;
+      // Start from actual warehouse stock (already reflects received orders)
+      // Don't add overdue order quantities — if the order hasn't been received,
+      // the stock hasn't changed; warehouseQty from the sheet is the source of truth.
+      let running = item.currentStock;
 
       // Already below min?
       if (running <= minAmt) {
