@@ -52,6 +52,7 @@ interface ReviewItem {
   formula?: string;
   content?: string;
   parentSku?: string; // linked sub-item of a suggestion
+  isManualAdd?: boolean; // added via review-phase search
 }
 
 interface SubmissionStatus {
@@ -96,6 +97,10 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
   // Three-phase dialog state
   const [dialogPhase, setDialogPhase] = useState<"form" | "review" | "email" | "submitting">("form");
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const [reviewSearchQuery, setReviewSearchQuery] = useState("");
+  const [showReviewDropdown, setShowReviewDropdown] = useState(false);
+  const reviewDropdownRef = useRef<HTMLDivElement>(null);
+  const reviewInputRef = useRef<HTMLInputElement>(null);
   const [submissionStatuses, setSubmissionStatuses] = useState<SubmissionStatus[]>([]);
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [emailMessage, setEmailMessage] = useState("");
@@ -153,6 +158,15 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     return set;
   }, [openOrders]);
 
+  // Product lookup by SKU
+  const productLookup = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof products>[number]>();
+    if (products) {
+      for (const p of products) map.set(p.sku.trim(), p);
+    }
+    return map;
+  }, [products]);
+
   // Low-stock Peer Pharm products without open orders (for suggestions)
   const lowStockSuggestions = useMemo(() => {
     if (!products) return [];
@@ -173,6 +187,20 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
     ).slice(0, 10);
   }, [products, searchQuery]);
+
+  // Filter Peer Pharm products for review-phase search
+  const reviewSearchResults = useMemo(() => {
+    if (!products || !reviewSearchQuery.trim()) return [];
+    const q = reviewSearchQuery.trim().toLowerCase();
+    const existingSkus = new Set(reviewItems.map((r) => r.sku));
+    return products
+      .filter((p) => {
+        if (!p.manufacturer.includes("פאר")) return false;
+        if (existingSkus.has(p.sku.trim())) return false;
+        return p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q);
+      })
+      .slice(0, 10);
+  }, [products, reviewSearchQuery, reviewItems]);
 
   // Pre-fill fields when dialog opens with initialData
   useEffect(() => {
@@ -222,12 +250,16 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     }
   }, [open]);
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
           inputRef.current && !inputRef.current.contains(e.target as Node)) {
         setShowDropdown(false);
+      }
+      if (reviewDropdownRef.current && !reviewDropdownRef.current.contains(e.target as Node) &&
+          reviewInputRef.current && !reviewInputRef.current.contains(e.target as Node)) {
+        setShowReviewDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -297,10 +329,39 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setContextOnTheWay(undefined);
     setDialogPhase("form");
     setReviewItems([]);
+    setReviewSearchQuery("");
+    setShowReviewDropdown(false);
     setSubmissionStatuses([]);
     setEmailStatus("idle");
     setEmailMessage("");
     setEmailOrderRows([]);
+  };
+
+  // Helper: build linked children for a given SKU (used by handleSubmit and review-phase search)
+  const buildLinkedChildren = (parentSku: string, allExcluded: Set<string>): ReviewItem[] => {
+    const parentLinked = linkedProductsMap.get(parentSku);
+    if (!parentLinked || parentLinked.length === 0) return [];
+    return parentLinked
+      .filter((l) => !allExcluded.has(l.sku))
+      .map((l) => {
+        const prevOrd = prevOrderMap.get(l.sku.trim());
+        const prod = productLookup.get(l.sku.trim());
+        return {
+          name: l.name,
+          sku: l.sku,
+          supplierSku: l.supplierSku || supplierSkuMap.get(l.sku) || "",
+          warehouseQty: l.warehouseQty,
+          minAmount: l.minAmount,
+          quantity: String(l.minAmount || ""),
+          checked: false,
+          isOriginal: false,
+          parentSku,
+          container: prod?.container || "",
+          distributionNotes: prevOrd?.distributionNotes || "",
+          formula: prevOrd?.formula || "",
+          content: prevOrd?.content || "",
+        };
+      });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -309,13 +370,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
 
     const currentSku = dermaSku.trim();
     const linked = linkedProductsMap.get(currentSku);
-
-    // Build review items: original product
-    // Build product lookup for container info
-    const productLookup = new Map<string, typeof products extends (infer T)[] | undefined ? T : never>();
-    if (products) {
-      for (const p of products) productLookup.set(p.sku.trim(), p);
-    }
 
     const prevOrig = prevOrderMap.get(currentSku);
     const originalItem: ReviewItem = {
@@ -353,33 +407,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         content: prev?.content || "",
       };
     });
-
-    // Helper: build linked children for a given SKU
-    const buildLinkedChildren = (parentSku: string, allExcluded: Set<string>): ReviewItem[] => {
-      const parentLinked = linkedProductsMap.get(parentSku);
-      if (!parentLinked || parentLinked.length === 0) return [];
-      return parentLinked
-        .filter((l) => !allExcluded.has(l.sku))
-        .map((l) => {
-          const prevOrd = prevOrderMap.get(l.sku.trim());
-          const prod = productLookup.get(l.sku.trim());
-          return {
-            name: l.name,
-            sku: l.sku,
-            supplierSku: l.supplierSku || supplierSkuMap.get(l.sku) || "",
-            warehouseQty: l.warehouseQty,
-            minAmount: l.minAmount,
-            quantity: String(l.minAmount || ""),
-            checked: false,
-            isOriginal: false,
-            parentSku,
-            container: prod?.container || "",
-            distributionNotes: prevOrd?.distributionNotes || "",
-            formula: prevOrd?.formula || "",
-            content: prevOrd?.content || "",
-          };
-        });
-    };
 
     // Low-stock suggestions (exclude original and linked SKUs)
     const excludeSkus = new Set([currentSku, ...linkedItems.map((l) => l.sku)]);
@@ -636,6 +663,48 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     );
   };
 
+  const handleAddFromReviewSearch = (product: NonNullable<typeof products>[number]) => {
+    const sku = product.sku.trim();
+    const prev = prevOrderMap.get(sku);
+    const allExistingSkus = new Set(reviewItems.map((r) => r.sku));
+
+    const newItem: ReviewItem = {
+      name: product.name,
+      sku,
+      supplierSku: product.supplierSku || supplierSkuMap.get(sku) || "",
+      warehouseQty: product.warehouseQty,
+      minAmount: product.minAmount,
+      quantity: String(product.minAmount || ""),
+      checked: true,
+      isOriginal: false,
+      isManualAdd: true,
+      container: product.container || "",
+      distributionNotes: prev?.distributionNotes || "",
+      packagingLabels: prev?.packagingLabels || "",
+      formula: prev?.formula || "",
+      content: prev?.content || "",
+    };
+
+    allExistingSkus.add(sku);
+    const children = buildLinkedChildren(sku, allExistingSkus).map((c) => ({
+      ...c,
+      isManualAdd: true,
+    }));
+
+    setReviewItems((prev) => {
+      const firstSuggestionIdx = prev.findIndex((r) => r.isSuggestion && !r.parentSku);
+      if (firstSuggestionIdx === -1) {
+        return [...prev, newItem, ...children];
+      }
+      const before = prev.slice(0, firstSuggestionIdx);
+      const after = prev.slice(firstSuggestionIdx);
+      return [...before, newItem, ...children, ...after];
+    });
+
+    setReviewSearchQuery("");
+    setShowReviewDropdown(false);
+  };
+
   const checkedCount = reviewItems.filter((item) => item.checked).length;
   const allResolved = submissionStatuses.length > 0 && submissionStatuses.every((s) => s.status === "success" || s.status === "error");
 
@@ -651,7 +720,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       <DialogTrigger asChild>
         {trigger ?? defaultTrigger}
       </DialogTrigger>
-      <DialogContent dir="rtl" className={`max-h-[90vh] overflow-y-auto ${dialogPhase === "email" ? "sm:max-w-[90vw]" : "sm:max-w-lg"}`}>
+      <DialogContent dir="rtl" className={`max-h-[90vh] overflow-y-auto ${dialogPhase === "email" ? "sm:max-w-[90vw]" : dialogPhase === "review" ? "sm:max-w-[min(90vw,700px)]" : "sm:max-w-lg"}`}>
         <DialogHeader>
           <DialogTitle>
             {dialogPhase === "form" && "הוספת הזמנה חדשה"}
@@ -851,7 +920,12 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
             <div className="space-y-2">
               {(() => {
                 let shownSeparator = false;
+                let shownSearchBar = false;
                 return reviewItems.map((item, idx) => {
+                  // Show search bar just before the first standalone suggestion
+                  const shouldShowSearchBar = !shownSearchBar && item.isSuggestion && !item.parentSku;
+                  if (shouldShowSearchBar) shownSearchBar = true;
+
                   const showSeparator = item.isSuggestion && !item.parentSku && !shownSeparator;
                   if (showSeparator) shownSeparator = true;
                   const isLinkedChild = !!item.parentSku;
@@ -864,6 +938,63 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
 
                   return (
                     <div key={item.sku}>
+                      {shouldShowSearchBar && (
+                        <div className="relative my-3">
+                          <div className="flex items-center gap-2 pt-1 pb-1">
+                            <div className="flex-1 border-t border-dashed border-blue-400/40" />
+                            <span className="text-xs text-blue-500 font-medium whitespace-nowrap">הוסף מוצר</span>
+                            <div className="flex-1 border-t border-dashed border-blue-400/40" />
+                          </div>
+                          <div className="relative">
+                            <Input
+                              ref={reviewInputRef}
+                              value={reviewSearchQuery}
+                              onChange={(e) => {
+                                setReviewSearchQuery(e.target.value);
+                                setShowReviewDropdown(true);
+                              }}
+                              onFocus={() => {
+                                if (reviewSearchQuery.trim()) setShowReviewDropdown(true);
+                              }}
+                              placeholder="חפש מוצר פאר-פארם להוספה..."
+                              className="h-8 text-sm pe-8"
+                            />
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-base pointer-events-none">
+                              <MaterialIcon name="search" />
+                            </span>
+                          </div>
+                          {showReviewDropdown && reviewSearchResults.length > 0 && (
+                            <div
+                              ref={reviewDropdownRef}
+                              className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto"
+                            >
+                              {reviewSearchResults.map((product) => (
+                                <button
+                                  key={product.sku}
+                                  type="button"
+                                  className="w-full px-3 py-2 text-right hover:bg-accent flex items-center justify-between gap-2 text-sm"
+                                  onClick={() => handleAddFromReviewSearch(product)}
+                                >
+                                  <div className="min-w-0">
+                                    <div className="font-medium truncate">{product.name}</div>
+                                    <div className="text-xs text-muted-foreground">{product.sku}</div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                      מלאי: {product.warehouseQty}
+                                    </span>
+                                    {openOrderSkus.has(product.sku.trim()) && (
+                                      <span className="text-[10px] bg-amber-500/15 text-amber-600 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                        יש הזמנה פתוחה
+                                      </span>
+                                    )}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {showSeparator && (
                         <div className="flex items-center gap-2 pt-2 pb-1">
                           <div className="flex-1 border-t border-dashed border-amber-400/60" />
@@ -874,7 +1005,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                       <div
                         className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-opacity ${
                           item.checked ? "bg-background" : "opacity-50 bg-muted/30"
-                        } ${item.isOriginal ? "border-primary/30" : ""} ${item.isSuggestion && !item.checked ? "border-amber-200" : ""} ${isLinkedChild ? "mr-6 border-dashed" : ""}`}
+                        } ${item.isOriginal ? "border-primary/30" : ""} ${item.isSuggestion && !item.checked ? "border-amber-200" : ""} ${item.isManualAdd && !item.parentSku ? "border-green-500/30" : ""} ${isLinkedChild ? "mr-6 border-dashed" : ""}`}
                       >
                         <input
                           type="checkbox"
@@ -889,6 +1020,9 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                             {item.isOriginal && (
                               <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">מקורי</span>
                             )}
+                            {item.isManualAdd && !item.parentSku && (
+                              <span className="text-[10px] bg-green-500/10 text-green-500 px-1.5 py-0.5 rounded shrink-0">נוסף ידנית</span>
+                            )}
                             {isLinkedChild && (
                               <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded shrink-0">מקושר</span>
                             )}
@@ -899,6 +1033,19 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                             {item.minAmount > 0 && <span>מינימום: {item.minAmount}</span>}
                           </div>
                         </div>
+                        {item.isManualAdd && !item.parentSku && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReviewItems((prev) => prev.filter(
+                                (r) => r.sku !== item.sku && r.parentSku !== item.sku
+                              ));
+                            }}
+                            className="text-muted-foreground hover:text-destructive text-base shrink-0"
+                          >
+                            <MaterialIcon name="close" />
+                          </button>
+                        )}
                         <Input
                           type="number"
                           value={item.quantity}
@@ -953,6 +1100,64 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                   );
                 });
               })()}
+              {/* Search bar fallback: if no suggestions exist, show it at the end */}
+              {!reviewItems.some((r) => r.isSuggestion && !r.parentSku) && (
+                <div className="relative my-3">
+                  <div className="flex items-center gap-2 pt-1 pb-1">
+                    <div className="flex-1 border-t border-dashed border-blue-400/40" />
+                    <span className="text-xs text-blue-500 font-medium whitespace-nowrap">הוסף מוצר</span>
+                    <div className="flex-1 border-t border-dashed border-blue-400/40" />
+                  </div>
+                  <div className="relative">
+                    <Input
+                      ref={reviewInputRef}
+                      value={reviewSearchQuery}
+                      onChange={(e) => {
+                        setReviewSearchQuery(e.target.value);
+                        setShowReviewDropdown(true);
+                      }}
+                      onFocus={() => {
+                        if (reviewSearchQuery.trim()) setShowReviewDropdown(true);
+                      }}
+                      placeholder="חפש מוצר פאר-פארם להוספה..."
+                      className="h-8 text-sm pe-8"
+                    />
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-base pointer-events-none">
+                      <MaterialIcon name="search" />
+                    </span>
+                  </div>
+                  {showReviewDropdown && reviewSearchResults.length > 0 && (
+                    <div
+                      ref={reviewDropdownRef}
+                      className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto"
+                    >
+                      {reviewSearchResults.map((product) => (
+                        <button
+                          key={product.sku}
+                          type="button"
+                          className="w-full px-3 py-2 text-right hover:bg-accent flex items-center justify-between gap-2 text-sm"
+                          onClick={() => handleAddFromReviewSearch(product)}
+                        >
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{product.name}</div>
+                            <div className="text-xs text-muted-foreground">{product.sku}</div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              מלאי: {product.warehouseQty}
+                            </span>
+                            {openOrderSkus.has(product.sku.trim()) && (
+                              <span className="text-[10px] bg-amber-500/15 text-amber-600 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                יש הזמנה פתוחה
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Actions */}
