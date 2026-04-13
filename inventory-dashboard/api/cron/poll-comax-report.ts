@@ -84,9 +84,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }))
         );
 
-        // Update products stock
+        // Update products stock (clamp negatives to 0)
         const stockResult = await writer.bulkUpdateStock(
-          items.map((i) => ({ sku: i.item_code, qty: i.inventory }))
+          items.map((i) => ({ sku: i.item_code, qty: Math.max(0, i.inventory) }))
         );
 
         // Auto-add new products not found in Products sheet
@@ -97,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return {
               sku,
               name: item?.product_name || "",
-              stock: item?.inventory ?? 0,
+              stock: Math.max(0, item?.inventory ?? 0),
             };
           });
 
