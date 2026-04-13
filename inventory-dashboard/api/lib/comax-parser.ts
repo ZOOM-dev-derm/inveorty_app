@@ -55,7 +55,7 @@ function parseHtmlReport(buffer: Buffer): ComaxItem[] {
     const h = headerCells[i];
     // "קוד פריט" or "פריט" but not "ברקוד פריט"
     if ((h.includes("קוד פריט") || h === "פריט") && !h.includes("ברקוד")) itemCodeCol = i;
-    if (h.includes("כמות מלאי") || h.includes("יתרה נוכחית") || h.includes("יתרה במלאי")) inventoryCol = i;
+    if (h.includes("כמות מלאי") || h.includes("יתרה נוכחית") || h.includes("יתרה במלאי") || h === "מלאי") inventoryCol = i;
     if (h.includes("שם פריט")) productNameCol = i;
     if (h.includes("ברקוד")) barcodeCol = i;
   }
@@ -150,7 +150,8 @@ function parseCsvReport(buffer: Buffer): ComaxItem[] {
     if (
       h.includes("כמות מלאי") ||
       h.includes("יתרה נוכחית") ||
-      h.includes("יתרה במלאי")
+      h.includes("יתרה במלאי") ||
+      h === "מלאי"
     )
       inventoryCol = i;
     if (h.includes("שם פריט")) productNameCol = i;
@@ -216,7 +217,7 @@ function parseExcelReport(buffer: Buffer): ComaxItem[] {
     for (const key of keys) {
       const k = key.trim();
       if ((k.includes("קוד פריט") || k === "פריט") && !k.includes("ברקוד")) itemCodeKey = key;
-      if (k.includes("כמות מלאי") || k.includes("יתרה נוכחית") || k.includes("יתרה במלאי")) inventoryKey = key;
+      if (k.includes("כמות מלאי") || k.includes("יתרה נוכחית") || k.includes("יתרה במלאי") || k === "מלאי") inventoryKey = key;
       if (k.includes("שם פריט")) productNameKey = key;
       if (k.includes("ברקוד")) barcodeKey = key;
     }
