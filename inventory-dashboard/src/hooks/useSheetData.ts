@@ -201,6 +201,17 @@ export function useProductForecast(sku: string, currentStock: number) {
       let runningWithOrders = startQty;
       const hasOrders = skuOrders.length > 0;
 
+      // Add overdue orders (expected date already passed) as immediate spike
+      for (const order of skuOrders) {
+        if (order.expectedDate! <= forecastStart) {
+          runningWithOrders += order.qty;
+        }
+      }
+      // Update today's onTheWay point to reflect overdue orders
+      if (todayPoint && hasOrders) {
+        todayPoint.onTheWay = Math.max(0, Math.round(runningWithOrders));
+      }
+
       for (let i = 1; i <= 26; i++) {
         const prevDate = new Date(forecastStart);
         prevDate.setDate(prevDate.getDate() + (i - 1) * 7);
@@ -211,11 +222,24 @@ export function useProductForecast(sku: string, currentStock: number) {
         runningForecast = runningForecast + forecastSlope * 7;
         runningWithOrders = runningWithOrders + forecastSlope * 7;
 
-        // Add orders only to the withOrders line
+        // Check if orders arrive this week
+        let ordersThisWeek = 0;
         for (const order of skuOrders) {
           if (order.expectedDate! > prevDate && order.expectedDate! <= futureDate) {
-            runningWithOrders += order.qty;
+            ordersThisWeek += order.qty;
           }
+        }
+
+        // Insert pre-spike point before order arrival for a sharp jump
+        if (ordersThisWeek > 0 && hasOrders) {
+          chartData.push({
+            date: formatDateShort(futureDate),
+            quantity: null,
+            forecast: Math.max(0, Math.round(runningForecast)),
+            onTheWay: Math.max(0, Math.round(runningWithOrders)),
+            minAmount: minAmount,
+          });
+          runningWithOrders += ordersThisWeek;
         }
 
         chartData.push({
@@ -278,6 +302,17 @@ export function useProductForecast(sku: string, currentStock: number) {
       let runningWithOrders = startQty;
       const hasOrders = skuOrders.length > 0;
 
+      // Add overdue orders (expected date already passed) as immediate spike
+      for (const order of skuOrders) {
+        if (order.expectedDate! <= today) {
+          runningWithOrders += order.qty;
+        }
+      }
+      // Update today's onTheWay point to reflect overdue orders
+      if (chartData.length > 0 && hasOrders) {
+        chartData[chartData.length - 1].onTheWay = Math.max(0, Math.round(runningWithOrders));
+      }
+
       for (let i = 1; i <= 26; i++) {
         const prevDate = new Date(today);
         prevDate.setDate(prevDate.getDate() + (i - 1) * 7);
@@ -287,10 +322,23 @@ export function useProductForecast(sku: string, currentStock: number) {
         runningForecast = runningForecast + forecastSlope * 7;
         runningWithOrders = runningWithOrders + forecastSlope * 7;
 
+        let ordersThisWeek = 0;
         for (const order of skuOrders) {
           if (order.expectedDate! > prevDate && order.expectedDate! <= futureDate) {
-            runningWithOrders += order.qty;
+            ordersThisWeek += order.qty;
           }
+        }
+
+        // Insert pre-spike point before order arrival for a sharp jump
+        if (ordersThisWeek > 0 && hasOrders) {
+          chartData.push({
+            date: formatDateShort(futureDate),
+            quantity: null,
+            forecast: Math.max(0, Math.round(runningForecast)),
+            onTheWay: Math.max(0, Math.round(runningWithOrders)),
+            minAmount: minAmount,
+          });
+          runningWithOrders += ordersThisWeek;
         }
 
         chartData.push({

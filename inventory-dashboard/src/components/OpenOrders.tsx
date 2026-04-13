@@ -1,4 +1,4 @@
-import { useOrders, useProducts, useUpdateOrderStatus, useUpdateOrderComments, useSendFollowUp, useUpdateOrderFields } from "@/hooks/useSheetData";
+import { useOrders, useProducts, useUpdateOrderStatus, useUpdateOrderComments, useSendFollowUp, useUpdateOrderFields, useDeleteOrder } from "@/hooks/useSheetData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -88,6 +88,8 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
   const commentsMutation = useUpdateOrderComments();
   const followUpMutation = useSendFollowUp();
   const updateFieldsMutation = useUpdateOrderFields();
+  const deleteOrderMutation = useDeleteOrder();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [followUpSent, setFollowUpSent] = useState(false);
   const [showArrivedDetails, setShowArrivedDetails] = useState(false);
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
@@ -124,8 +126,6 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
     );
   };
 
-  const lastTwoComments = commentEntries.slice(-2);
-
   return (
     <div
       className={`order-detail py-3 border-b border-border/20 last:border-0 ${received ? "opacity-60" : ""}`}
@@ -153,48 +153,41 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
               </Badge>
             </div>
             {/* Order details grid */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[11px] text-muted-foreground">
+            <div className="mt-2 bg-muted/10 rounded-lg p-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
               {mode === "product" && order.orderDate && (
-                <span><span className="font-medium">תאריך:</span> {order.orderDate}</span>
+                <div>
+                  <span className="text-muted-foreground font-medium">תאריך:</span>{" "}
+                  <span className="text-foreground">{order.orderDate}</span>
+                </div>
               )}
               {order.dermaSku && (
-                <span><span className="font-medium">מק״ט דרמה:</span> <span className="text-foreground font-bold">{order.dermaSku}</span></span>
+                <div>
+                  <span className="text-muted-foreground font-medium">מק״ט דרמה:</span>{" "}
+                  <span className="text-foreground font-bold">{order.dermaSku}</span>
+                </div>
               )}
               {order.supplierSku && (
-                <span><span className="font-medium">מק״ט פאר פארם:</span> {order.supplierSku}</span>
+                <div>
+                  <span className="text-muted-foreground font-medium">מק״ט פאר פארם:</span>{" "}
+                  <span className="text-foreground">{order.supplierSku}</span>
+                </div>
               )}
               {order.container && (
-                <span><span className="font-medium">מיכל:</span> {order.container}</span>
+                <div>
+                  <span className="text-muted-foreground font-medium">מיכל:</span>{" "}
+                  <span className="text-foreground">{order.container}</span>
+                </div>
               )}
               {expectedDate && (
-                <span>
-                  <span className="font-medium">תאריך צפוי:</span>{" "}
-                  <span className={overdue ? "text-destructive font-medium" : ""}>{formatDate(expectedDate)}{estimated && " *"}</span>
-                </span>
+                <div>
+                  <span className="text-muted-foreground font-medium">תאריך צפוי:</span>{" "}
+                  <span className={overdue ? "text-destructive font-bold" : "text-foreground"}>{formatDate(expectedDate)}{estimated && " *"}</span>
+                </div>
               )}
             </div>
-            {lastTwoComments.length > 0 && (
-              <div className="mt-1 space-y-0.5">
-                {lastTwoComments.map((entry, i) => (
-                  <div key={i} className="text-[10px] text-muted-foreground/70 leading-tight truncate">
-                    {entry.date && <span className="ml-1">{entry.date}:</span>} {entry.text}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-          {received && (
-            <Badge className="text-[10px] px-1.5 py-0 bg-green-500/10 text-green-400 border-green-500/20">
-              התקבל ✓
-            </Badge>
-          )}
-          {overdue && !received && (
-            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-              באיחור
-            </Badge>
-          )}
           {!received && arrivedFlag && (
             <Button
               variant="outline"
@@ -214,7 +207,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
             <Button
               variant="outline"
               size="sm"
-              className="h-7 px-2 text-[11px] gap-1"
+              className="h-8 px-3 text-[11px] gap-1.5 rounded-full bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
               disabled={statusMutation.isPending}
               title="סמן כהתקבל"
               onClick={(e) => {
@@ -234,9 +227,9 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
             </Button>
           )}
           <Button
-            variant={hasComments ? "default" : "outline"}
+            variant="outline"
             size="sm"
-            className={`h-7 px-2 text-[11px] gap-1 relative ${showComments ? "ring-1 ring-primary/50" : ""}`}
+            className={`h-8 px-3 text-[11px] gap-1.5 rounded-full ${hasComments ? "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100" : "bg-blue-50/50 text-blue-500 border-blue-100 hover:bg-blue-50"} ${showComments ? "ring-2 ring-blue-200" : ""}`}
             title="הצג/הוסף הערות"
             onClick={(e) => {
               e.stopPropagation();
@@ -246,7 +239,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
             <span className="text-sm"><MaterialIcon name="chat" /></span>
             הערות
             {hasComments && (
-              <Badge variant="secondary" className="h-4 px-1 text-[9px] mr-0.5">
+              <Badge variant="secondary" className="h-4 px-1 text-[9px] mr-0.5 bg-blue-100 text-blue-600">
                 {commentEntries.length}
               </Badge>
             )}
@@ -254,7 +247,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
           <Button
             variant="outline"
             size="sm"
-            className={`h-7 px-2 text-[11px] gap-1 ${followUpSent ? "bg-green-500/10 text-green-400 border-green-500/20" : ""}`}
+            className={`h-8 px-3 text-[11px] gap-1.5 rounded-full ${followUpSent ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100"}`}
             disabled={followUpMutation.isPending}
             title="שלח מייל מעקב לספק"
             onClick={(e) => {
@@ -275,7 +268,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
           <Button
             variant="outline"
             size="sm"
-            className="h-7 px-2 text-[11px] gap-1"
+            className="h-8 px-3 text-[11px] gap-1.5 rounded-full bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
             title="ערוך הזמנה"
             onClick={(e) => {
               e.stopPropagation();
@@ -435,46 +428,103 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
                 <p className="text-[10px] text-muted-foreground mt-1">כל שורה מופרדת ב-|. ניתן למחוק, לערוך או להוסיף.</p>
               </div>
             </div>
+            <DialogFooter className="flex-col gap-3 sm:flex-col">
+              <div className="flex gap-2 justify-end w-full">
+                <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+                  ביטול
+                </Button>
+                <Button
+                  disabled={updateFieldsMutation.isPending}
+                  onClick={() => {
+                    const fields: Record<string, string> = {};
+                    if (editQuantity !== order.quantity) fields['כמות סה"כ'] = editQuantity;
+                    if (editExpectedDate !== (order.expectedDate || "")) fields["תאריך צפי"] = editExpectedDate;
+                    if (editContainer !== (order.container || "")) fields["מיכל"] = editContainer;
+                    if (editDistribution !== (order.distributionNotes || "")) fields["חלוקה+הערות"] = editDistribution;
+
+                    const commentsChanged = editComments !== (order.comments || "");
+
+                    if (Object.keys(fields).length === 0 && !commentsChanged) {
+                      setShowEditDialog(false);
+                      return;
+                    }
+
+                    updateFieldsMutation.mutate(
+                      {
+                        rowIndex: order.rowIndex,
+                        fields,
+                        replaceComments: commentsChanged ? editComments : undefined,
+                      },
+                      {
+                        onSuccess: () => setShowEditDialog(false),
+                        onError: (err) => {
+                          console.error("[EditOrder] Failed:", err);
+                          alert("שגיאה בשמירה. נסה שוב.");
+                        },
+                      }
+                    );
+                  }}
+                >
+                  {updateFieldsMutation.isPending ? (
+                    <span className="text-base animate-spin ml-2"><MaterialIcon name="progress_activity" /></span>
+                  ) : null}
+                  שמור
+                </Button>
+              </div>
+              <div className="border-t border-border pt-3 w-full">
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
+                  <span className="text-base ml-2"><MaterialIcon name="delete" /></span>
+                  מחק הזמנה
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete confirmation dialog */}
+        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <DialogContent className="max-w-sm" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>מחיקת הזמנה</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              האם למחוק את ההזמנה של <strong>{order.productName}</strong> ({order.quantity} יח')?
+              <br />
+              <span className="text-destructive font-medium">פעולה זו לא ניתנת לביטול.</span>
+            </p>
             <DialogFooter className="gap-2 sm:gap-0">
-              <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
                 ביטול
               </Button>
               <Button
-                disabled={updateFieldsMutation.isPending}
+                variant="destructive"
+                disabled={deleteOrderMutation.isPending}
                 onClick={() => {
-                  const fields: Record<string, string> = {};
-                  if (editQuantity !== order.quantity) fields['כמות סה"כ'] = editQuantity;
-                  if (editExpectedDate !== (order.expectedDate || "")) fields["תאריך צפי"] = editExpectedDate;
-                  if (editContainer !== (order.container || "")) fields["מיכל"] = editContainer;
-                  if (editDistribution !== (order.distributionNotes || "")) fields["חלוקה+הערות"] = editDistribution;
-
-                  const commentsChanged = editComments !== (order.comments || "");
-
-                  if (Object.keys(fields).length === 0 && !commentsChanged) {
-                    setShowEditDialog(false);
-                    return;
-                  }
-
-                  updateFieldsMutation.mutate(
+                  deleteOrderMutation.mutate(
+                    { rowIndex: order.rowIndex },
                     {
-                      rowIndex: order.rowIndex,
-                      fields,
-                      replaceComments: commentsChanged ? editComments : undefined,
-                    },
-                    {
-                      onSuccess: () => setShowEditDialog(false),
+                      onSuccess: () => {
+                        setShowDeleteConfirm(false);
+                        setShowEditDialog(false);
+                      },
                       onError: (err) => {
-                        console.error("[EditOrder] Failed:", err);
-                        alert("שגיאה בשמירה. נסה שוב.");
+                        console.error("[DeleteOrder] Failed:", err);
+                        alert("שגיאה במחיקה. נסה שוב.");
                       },
                     }
                   );
                 }}
               >
-                {updateFieldsMutation.isPending ? (
+                {deleteOrderMutation.isPending ? (
                   <span className="text-base animate-spin ml-2"><MaterialIcon name="progress_activity" /></span>
-                ) : null}
-                שמור
+                ) : (
+                  <span className="text-base ml-2"><MaterialIcon name="delete" /></span>
+                )}
+                מחק
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -519,19 +569,29 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
         </div>
       )}
 
-      {/* Comment log section */}
+      {/* Comment log section — timeline */}
       {showComments && (
-        <div className="mt-2 mr-6 border-t border-border/20 pt-2">
+        <div className="mt-3 mr-6 border-t border-border/20 pt-3">
           {commentEntries.length > 0 && (
-            <div className="space-y-1 mb-2">
-              {commentEntries.map((entry, i) => (
-                <div key={i} className="flex gap-2 text-xs">
-                  {entry.date && (
-                    <span className="text-muted-foreground shrink-0">{entry.date}</span>
-                  )}
-                  <span>{entry.text}</span>
-                </div>
-              ))}
+            <div className="relative mr-2 mb-3">
+              {/* Vertical timeline line */}
+              <div className="absolute right-[5px] top-2 bottom-2 w-px bg-border/40" />
+              <div className="space-y-3">
+                {commentEntries.map((entry, i) => (
+                  <div key={i} className="flex gap-3 items-start relative">
+                    {/* Timeline dot */}
+                    <div className="relative z-10 mt-1.5 shrink-0">
+                      <div className="w-[11px] h-[11px] rounded-full bg-primary/80 border-2 border-background" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {entry.date && (
+                        <div className="text-[11px] font-bold text-muted-foreground mb-0.5">{entry.date}</div>
+                      )}
+                      <div className="text-sm text-foreground leading-relaxed">{entry.text}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           <div className="flex gap-1.5">
@@ -541,12 +601,12 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
               onChange={(e) => setNewComment(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleAddComment(); }}
               placeholder="הוסף הערה..."
-              className="flex-1 text-xs border border-border/50 rounded-md px-2 py-1 bg-background"
+              className="flex-1 text-xs border border-border/40 rounded-full px-3 py-1.5 bg-muted/30 focus:bg-background focus:border-primary/30 transition-colors"
             />
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              className="h-7 w-7 p-0 rounded-full hover:bg-primary/10"
               disabled={commentsMutation.isPending || !newComment.trim()}
               onClick={(e) => {
                 e.stopPropagation();
@@ -556,7 +616,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
               {commentsMutation.isPending ? (
                 <span className="text-sm animate-spin"><MaterialIcon name="progress_activity" /></span>
               ) : (
-                <span className="text-sm"><MaterialIcon name="send" /></span>
+                <span className="text-sm text-primary"><MaterialIcon name="send" /></span>
               )}
             </Button>
           </div>
@@ -572,7 +632,7 @@ function OrderGroupCard({ group, mode, skuNameMap, arrivedFlags, onRemoveArrived
 
   return (
     <div
-      className={`px-6 md:px-8 py-5 transition-colors ${group.hasOverdue ? "bg-red-950/20" : "hover:bg-white/5"}`}
+      className={`px-6 md:px-8 py-5 transition-colors ${group.hasOverdue ? "bg-red-50/80" : "bg-white/90 hover:bg-white"}`}
     >
       {/* Header — always visible, tappable */}
       <div

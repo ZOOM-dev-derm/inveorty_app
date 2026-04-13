@@ -72,8 +72,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
   const panLeft = useCallback(() => {
     setZoomRange(prev => {
       const range = prev.end - prev.start;
-      const step = Math.max(1, Math.round(range * 0.2));
-      const newStart = Math.max(0, prev.start - step);
+      const newStart = Math.max(0, prev.start - 1);
       return { start: newStart, end: newStart + range };
     });
   }, []);
@@ -82,8 +81,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
     setZoomRange(prev => {
       const maxEnd = chartData.length - 1;
       const range = prev.end - prev.start;
-      const step = Math.max(1, Math.round(range * 0.2));
-      const newEnd = Math.min(maxEnd, prev.end + step);
+      const newEnd = Math.min(maxEnd, prev.end + 1);
       return { start: newEnd - range, end: newEnd };
     });
   }, [chartData.length]);
@@ -175,6 +173,11 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
     if (minAmount !== null && minAmount > max) max = minAmount;
     return max > 0 ? Math.ceil(max * 1.05) : undefined; // 5% padding
   }, [visibleData, minAmount]);
+
+  const todayLabel = useMemo(() => {
+    const d = new Date();
+    return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}`;
+  }, []);
 
   const ratePerMonth = Math.round(declineRate * 30);
   const realRatePerMonth = Math.round(realRate * 30);
@@ -406,13 +409,13 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
                   <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" opacity={1} />
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
               <XAxis
                 dataKey="date"
                 tick={{ fontSize: 10, fontFamily: "Heebo", fill: "#94a3b8" }}
                 tickLine={false}
                 axisLine={false}
-                interval="preserveStartEnd"
+                interval={Math.max(0, Math.floor(visibleData.length / 10) - 1)}
               />
               <YAxis
                 tick={{ fontSize: 10, fontFamily: "Heebo", fill: "#94a3b8" }}
@@ -443,13 +446,15 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
                   return [value ?? 0, label];
                 }}
               />
-              <ReferenceLine
-                y={15}
-                stroke="#ef4444"
-                strokeDasharray="4 4"
-                strokeWidth={1.5}
-                label={{ value: "מלאי נמוך", position: "insideTopRight", fontSize: 10, fill: "#ef4444", fontFamily: "Heebo", fontWeight: 600 }}
-              />
+              {minAmount === null && (
+                <ReferenceLine
+                  y={15}
+                  stroke="#ef4444"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.5}
+                  label={{ value: "מלאי נמוך", position: "insideTopRight", fontSize: 10, fill: "#ef4444", fontFamily: "Heebo", fontWeight: 600 }}
+                />
+              )}
               {minAmount !== null && (
                 <ReferenceLine
                   y={minAmount}
@@ -459,6 +464,13 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
                   label={{ value: "מינימום", position: "insideTopLeft", fontSize: 10, fill: "#a855f7", fontFamily: "Heebo", fontWeight: 600 }}
                 />
               )}
+              <ReferenceLine
+                x={todayLabel}
+                stroke="#64748b"
+                strokeDasharray="4 4"
+                strokeWidth={1}
+                label={{ value: "היום", position: "insideTopRight", fontSize: 10, fill: "#64748b", fontFamily: "Heebo", fontWeight: 600 }}
+              />
               {/* Critical Point Marker */}
               {criticalPoint && (
                 <ReferenceDot
@@ -504,7 +516,7 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
               />
               {/* On the way — subtle dashed line, no dots */}
               <Area
-                type="monotone"
+                type="linear"
                 dataKey="onTheWay"
                 stroke="#a855f7"
                 strokeWidth={1.5}
