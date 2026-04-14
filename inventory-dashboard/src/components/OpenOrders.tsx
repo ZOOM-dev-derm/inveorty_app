@@ -730,7 +730,7 @@ export function OpenOrders({ search, showReceived = false }: { search: string; s
     const filtered = terms.length > 0
       ? orders.filter((o) => {
         const lookedUpName = skuNameMap.get(o.dermaSku) || "";
-        const searchable = `${lookedUpName} ${o.productName || ""} ${o.orderDate || ""} ${o.dermaSku || ""}`.toLowerCase();
+        const searchable = `${lookedUpName} ${o.productName || ""} ${o.orderDate || ""} ${o.dermaSku || ""} ${o.supplierSku || ""}`.toLowerCase();
         return terms.every((term) => searchable.includes(term));
       })
       : orders;
