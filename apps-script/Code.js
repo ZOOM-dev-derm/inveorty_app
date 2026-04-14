@@ -86,6 +86,9 @@ function doPost(e) {
         var val = PropertiesService.getScriptProperties().getProperty(data.key);
         result = { success: true, key: data.key, value: val };
         break;
+      case "deleteOrder":
+        result = deleteOrder(ss, data);
+        break;
       default:
         result = { success: false, error: "Unknown action: " + action };
     }
@@ -378,6 +381,21 @@ function updateOrderFields(ss, data) {
   }
 
   return { success: true, updated: updated };
+}
+
+function deleteOrder(ss, data) {
+  var sheet = getSheetByGid(ss, ORDERS_GID);
+  if (!sheet) return { success: false, error: "Orders sheet not found" };
+
+  var rowIndex = data.rowIndex;
+  if (!rowIndex || rowIndex < 2)
+    return { success: false, error: "Invalid row index" };
+
+  if (rowIndex > sheet.getLastRow())
+    return { success: false, error: "Row index out of range" };
+
+  sheet.deleteRow(rowIndex);
+  return { success: true };
 }
 
 // ── Supplier Messages Sheet ──

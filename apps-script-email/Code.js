@@ -405,8 +405,10 @@ function sendDailyOrderEmail(ss, data) {
     var nameIdx = colMapping[5];
     var qtyIdx = colMapping[2];
     var skuIdx = colMapping[7];
+    var pharmIdx = colMapping[1];
     tableRows += '<tr><td style="padding:6px 10px;border:1px solid #ddd;">' +
       (nameIdx !== -1 ? matchingRows[t][nameIdx] || "" : "") + '</td><td style="padding:6px 10px;border:1px solid #ddd;">' +
+      (pharmIdx !== -1 ? matchingRows[t][pharmIdx] || "" : "") + '</td><td style="padding:6px 10px;border:1px solid #ddd;">' +
       (skuIdx !== -1 ? matchingRows[t][skuIdx] || "" : "") + '</td><td style="padding:6px 10px;border:1px solid #ddd;">' +
       (qtyIdx !== -1 ? matchingRows[t][qtyIdx] || "" : "") + '</td></tr>';
   }
@@ -420,6 +422,7 @@ function sendDailyOrderEmail(ss, data) {
     messageParagraphs +
     '<table dir="rtl" style="border-collapse:collapse;margin:16px 0;width:100%;max-width:600px;">' +
     '<tr><th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">שם פריט</th>' +
+    '<th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">מק"ט פאר פארם</th>' +
     '<th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">קוד דרמה</th>' +
     '<th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">כמות</th></tr>' +
     tableRows + '</table>' +
@@ -477,6 +480,7 @@ function sendDailyOrderEmailFromEdited(supplierEmail, orderDate, data) {
   var tableRows = "";
   for (var t = 0; t < rows.length; t++) {
     tableRows += '<tr><td style="padding:6px 10px;border:1px solid #ddd;">' + (rows[t].name || "") +
+      '</td><td style="padding:6px 10px;border:1px solid #ddd;">' + (rows[t].supplierSku || "") +
       '</td><td style="padding:6px 10px;border:1px solid #ddd;">' + (rows[t].sku || "") +
       '</td><td style="padding:6px 10px;border:1px solid #ddd;">' + (rows[t].quantity || "") + '</td></tr>';
   }
@@ -490,6 +494,7 @@ function sendDailyOrderEmailFromEdited(supplierEmail, orderDate, data) {
     messageParagraphs +
     '<table dir="rtl" style="border-collapse:collapse;margin:16px 0;width:100%;max-width:600px;">' +
     '<tr><th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">שם פריט</th>' +
+    '<th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">מק"ט פאר פארם</th>' +
     '<th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">קוד דרמה</th>' +
     '<th style="padding:8px 10px;border:1px solid #ddd;background:#4472C4;color:#fff;">כמות</th></tr>' +
     tableRows + '</table>' +
