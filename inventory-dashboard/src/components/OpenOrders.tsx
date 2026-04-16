@@ -618,15 +618,17 @@ function OrderGroupCard({ group, mode, skuNameMap, arrivedFlags, onRemoveArrived
 
       {/* Expandable order details */}
       <div
-        className="overflow-hidden transition-all duration-300"
-        style={{ maxHeight: expanded ? `${group.orders.length * 160 + 80}px` : "0px" }}
+        className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+        style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}
       >
-        <div className="pt-3 mt-3 border-t border-white/5">
-          {group.orders.map((order, idx) => (
-            <OrderItem key={`${order.dermaSku}-${order.rowIndex}`} order={order} index={idx} mode={mode} expanded={expanded} skuNameMap={skuNameMap} arrivedFlag={arrivedFlags[order.rowIndex]} onRemoveArrivedFlag={onRemoveArrivedFlag} />
-          ))}
-          <div className={`text-[10px] text-muted-foreground mt-2 transition-opacity duration-500 delay-300 ${expanded ? "opacity-100" : "opacity-0"}`}>
-            * תאריך משוער (תאריך הזמנה + 3 חודשים)
+        <div className="overflow-hidden min-h-0">
+          <div className="pt-3 mt-3 border-t border-white/5">
+            {group.orders.map((order, idx) => (
+              <OrderItem key={`${order.dermaSku}-${order.rowIndex}`} order={order} index={idx} mode={mode} expanded={expanded} skuNameMap={skuNameMap} arrivedFlag={arrivedFlags[order.rowIndex]} onRemoveArrivedFlag={onRemoveArrivedFlag} />
+            ))}
+            <div className={`text-[10px] text-muted-foreground mt-2 transition-opacity duration-500 delay-300 ${expanded ? "opacity-100" : "opacity-0"}`}>
+              * תאריך משוער (תאריך הזמנה + 3 חודשים)
+            </div>
           </div>
         </div>
       </div>
