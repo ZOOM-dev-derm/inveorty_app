@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { MaterialIcon } from "@/components/ui/MaterialIcon";
 import { AddProductDialog } from "@/components/AddProductDialog";
 import { AddOrderDialog } from "@/components/AddOrderDialog";
-import { useSyncMissingProducts, useSyncSupplierSkus } from "@/hooks/useSheetData";
+import { useSyncMissingProducts, useSyncSupplierSkus, useManualSyncComax } from "@/hooks/useSheetData";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface HeaderProps {
@@ -16,12 +16,22 @@ export function Header({ onMenuClick }: HeaderProps) {
   const [refreshing, setRefreshing] = useState(false);
   const syncMutation = useSyncMissingProducts();
   const syncSkusMutation = useSyncSupplierSkus();
+  const comaxSyncMutation = useManualSyncComax();
   const { user, logout } = useAuth();
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await client.invalidateQueries();
     setRefreshing(false);
+  };
+
+  const handleComaxSync = () => {
+    comaxSyncMutation.mutate(undefined, {
+      onSuccess: (data) => {
+        alert(data.message + (data.errors?.length ? `\nשגיאות: ${data.errors.join("; ")}` : ""));
+      },
+      onError: (err) => alert(`סנכרון נכשל: ${(err as Error).message}`),
+    });
   };
 
   return (
@@ -54,6 +64,18 @@ export function Header({ onMenuClick }: HeaderProps) {
           >
             <span className={`text-base ${(syncMutation.isPending || syncSkusMutation.isPending) ? "animate-spin" : ""}`}>
               <MaterialIcon name="sync" />
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleComaxSync}
+            disabled={comaxSyncMutation.isPending}
+            title="סנכרן מלאי מ-Comax עכשיו"
+            className="h-8 w-8 hidden sm:inline-flex hover:bg-white/10"
+          >
+            <span className={`text-base ${comaxSyncMutation.isPending ? "animate-spin" : ""}`}>
+              <MaterialIcon name="inventory" />
             </span>
           </Button>
           <Button
