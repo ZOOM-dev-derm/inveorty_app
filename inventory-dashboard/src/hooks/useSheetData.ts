@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { fetchProducts, fetchOrders, fetchHistory, fetchConnectedProducts, fetchSupplierMessages, fetchSupplierEmailHistory, addProduct, addOrder, updateOrderStatus, updateOrderComments, updateOrderFields, deleteOrder, syncMissingProducts, syncSupplierSkus, sendFollowUp, sendFreeEmail, linkSupplierMessage } from "@/services/googleSheets";
+import { fetchProducts, fetchOrders, fetchHistory, fetchConnectedProducts, fetchSupplierMessages, fetchSupplierEmailHistory, addProduct, addOrder, updateOrderStatus, updateOrderComments, updateOrderFields, deleteOrder, syncMissingProducts, syncSupplierSkus, sendFollowUp, sendFreeEmail, linkSupplierMessage, manualSyncComax } from "@/services/googleSheets";
 import type { Product, Order, LowStockItem, InventoryOverviewItem, HistoryItem, ForecastPoint, ConnectedProduct, SupplierMessage, SupplierEmail } from "@/types";
 
 const FIVE_MINUTES = 5 * 60 * 1000;
@@ -737,4 +737,15 @@ export function useInventoryOverview() {
   }
 
   return { data: items, isLoading, error };
+}
+
+export function useManualSyncComax() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: manualSyncComax,
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["products"] });
+      client.invalidateQueries({ queryKey: ["history"] });
+    },
+  });
 }

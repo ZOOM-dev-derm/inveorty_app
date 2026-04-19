@@ -307,6 +307,27 @@ export async function syncSupplierSkus() {
   return postToSheet("syncSupplierSkus");
 }
 
+const MANUAL_SYNC_TOKEN = import.meta.env.VITE_MANUAL_SYNC_TOKEN as string | undefined;
+
+export async function manualSyncComax(): Promise<{
+  message: string;
+  processed: number;
+  items: number;
+  newProducts: number;
+  errors?: string[];
+}> {
+  const res = await fetch("/api/manual/sync-comax", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Manual-Sync-Token": MANUAL_SYNC_TOKEN ?? "",
+    },
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+  return body;
+}
+
 export async function sendFollowUp(data: {
   rowIndex: number;
   orderDate: string;
