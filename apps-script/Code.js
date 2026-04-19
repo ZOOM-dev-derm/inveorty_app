@@ -78,6 +78,9 @@ function doPost(e) {
       case "bulkAddHistoryIfMissing":
         result = bulkAddHistoryIfMissing(ss, data);
         break;
+      case "appendComaxAuditLog":
+        result = appendComaxAuditLog(ss, data);
+        break;
       case "recalcMinAmounts":
         result = recalcMinAmounts();
         break;
@@ -1902,6 +1905,33 @@ function setupMonthlyMinRecalcTrigger() {
     .atHour(3)
     .create();
   Logger.log("Monthly min-amount recalc trigger created: 28th of each month at 3 AM");
+}
+
+/**
+ * Append one row to the comax-audit sheet. Auto-creates the sheet on first call.
+ * data = { timestamp, emailSubject, emailDate, itemsUpdated, itemsNotFound, error }
+ */
+function appendComaxAuditLog(ss, data) {
+  var sheet = ss.getSheetByName("comax-audit");
+  if (!sheet) {
+    sheet = ss.insertSheet("comax-audit");
+    sheet.getRange(1, 1, 1, 6).setValues([[
+      "timestamp", "email_subject", "email_date",
+      "items_updated", "items_not_found", "error"
+    ]]);
+    sheet.setFrozenRows(1);
+  }
+
+  sheet.appendRow([
+    data.timestamp || new Date().toISOString(),
+    data.emailSubject || "",
+    data.emailDate || "",
+    data.itemsUpdated == null ? "" : Number(data.itemsUpdated),
+    data.itemsNotFound == null ? "" : Number(data.itemsNotFound),
+    data.error || ""
+  ]);
+
+  return { success: true };
 }
 
 // Required for CORS preflight
