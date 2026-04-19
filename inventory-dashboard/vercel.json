@@ -6,6 +6,10 @@
     },
     {
       "path": "/api/cron/poll-comax-report",
+      "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/poll-comax-report",
       "schedule": "15 7 * * *"
     },
     {
