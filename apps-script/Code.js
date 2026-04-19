@@ -503,7 +503,6 @@ function bulkUpdateStock(ss, data) {
   var allData = sheet.getDataRange().getValues();
   var headers = allData[0];
 
-  // Find SKU ("פריט") and stock ("יתרת מלאי") columns
   var skuCol = -1;
   var stockCol = -1;
   for (var i = 0; i < headers.length; i++) {
@@ -514,26 +513,34 @@ function bulkUpdateStock(ss, data) {
   if (skuCol === -1) return { success: false, error: "SKU column (פריט) not found" };
   if (stockCol === -1) return { success: false, error: "Stock column (יתרת מלאי) not found" };
 
-  // Build SKU → row index map (1-based sheet rows)
-  var skuToRow = {};
+  // Map SKU -> 0-based index into allData (row 0 is header, so data starts at 1)
+  var skuToRowIdx = {};
   for (var r = 1; r < allData.length; r++) {
     var sku = allData[r][skuCol].toString().trim();
-    if (sku) skuToRow[sku] = r + 1; // +1 because sheet rows are 1-based and row 0 is header
+    if (sku) skuToRowIdx[sku] = r;
   }
+
+  // Read entire stock column once; rows 2..lastRow as a single-column 2D array
+  var stockRange = sheet.getRange(2, stockCol + 1, allData.length - 1, 1);
+  var stockValues = stockRange.getValues();
 
   var updated = 0;
   var notFound = [];
   for (var j = 0; j < items.length; j++) {
     var itemSku = items[j].sku.toString().trim();
     var qty = items[j].qty;
-    var row = skuToRow[itemSku];
-    if (row) {
-      sheet.getRange(row, stockCol + 1).setValue(qty); // +1 for 1-based column
+    var rowIdx = skuToRowIdx[itemSku];
+    if (rowIdx !== undefined) {
+      // allData row index r maps to stockValues index r-1 (since stockValues skips the header row)
+      stockValues[rowIdx - 1][0] = qty;
       updated++;
     } else {
       notFound.push(itemSku);
     }
   }
+
+  // One batched write replaces the per-cell setValue loop
+  stockRange.setValues(stockValues);
 
   return { success: true, updated: updated, notFound: notFound };
 }
