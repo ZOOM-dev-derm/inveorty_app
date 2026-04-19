@@ -176,6 +176,47 @@ async function extractAttachments(
   return attachments;
 }
 
+// Cache resolved label IDs for the lifetime of the function invocation
+const labelIdCache = new Map<string, string>();
+
+/**
+ * Apply a Gmail label to a message, creating the label if it doesn't exist.
+ */
+export async function applyLabel(
+  messageId: string,
+  labelName: string
+): Promise<void> {
+  const auth = getAuth();
+  const gmail = google.gmail({ version: "v1", auth });
+
+  let labelId = labelIdCache.get(labelName);
+  if (!labelId) {
+    const list = await gmail.users.labels.list({ userId: "me" });
+    const found = (list.data.labels || []).find((l) => l.name === labelName);
+    if (found?.id) {
+      labelId = found.id;
+    } else {
+      const created = await gmail.users.labels.create({
+        userId: "me",
+        requestBody: {
+          name: labelName,
+          labelListVisibility: "labelShow",
+          messageListVisibility: "show",
+        },
+      });
+      if (!created.data.id) throw new Error(`Failed to create label ${labelName}`);
+      labelId = created.data.id;
+    }
+    labelIdCache.set(labelName, labelId);
+  }
+
+  await gmail.users.messages.modify({
+    userId: "me",
+    id: messageId,
+    requestBody: { addLabelIds: [labelId] },
+  });
+}
+
 /** Extract plain text body from Gmail message payload */
 function extractPlainText(payload: any): string {
   if (!payload) return "";
