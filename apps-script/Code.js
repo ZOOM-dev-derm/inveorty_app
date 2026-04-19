@@ -75,6 +75,9 @@ function doPost(e) {
       case "bulkAddHistory":
         result = bulkAddHistory(ss, data);
         break;
+      case "bulkAddHistoryIfMissing":
+        result = bulkAddHistoryIfMissing(ss, data);
+        break;
       case "recalcMinAmounts":
         result = recalcMinAmounts();
         break;
@@ -598,6 +601,50 @@ function bulkAddHistory(ss, data) {
        .setValues(values);
 
   return { success: true, added: values.length };
+}
+
+/**
+ * Bulk-append rows to the History sheet, skipping any (item_code, date) pair
+ * that already exists. Idempotent — safe to call repeatedly with the same email.
+ * data.rows = [{ item_code, inventory, date }]
+ */
+function bulkAddHistoryIfMissing(ss, data) {
+  var sheet = getSheetByGid(ss, HISTORY_GID);
+  if (!sheet) return { success: false, error: "History sheet not found" };
+
+  var rows = data.rows;
+  if (!rows || !rows.length) return { success: true, added: 0, skipped: 0 };
+
+  // Read existing history once. Assumes columns: item_code | inventory | date
+  var existing = sheet.getDataRange().getValues();
+  var existingKeys = {};
+  for (var r = 1; r < existing.length; r++) {
+    var code = existing[r][0];
+    var date = existing[r][2];
+    if (code === "" && date === "") continue;
+    var key = String(code).trim() + "|" + String(date).trim();
+    existingKeys[key] = true;
+  }
+
+  var toAppend = [];
+  var skipped = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var k = String(row.item_code).trim() + "|" + String(row.date).trim();
+    if (existingKeys[k]) {
+      skipped++;
+    } else {
+      toAppend.push([row.item_code, row.inventory, row.date]);
+      existingKeys[k] = true; // guard against duplicates within the same payload
+    }
+  }
+
+  if (toAppend.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, toAppend.length, 3)
+         .setValues(toAppend);
+  }
+
+  return { success: true, added: toAppend.length, skipped: skipped };
 }
 
 /**
