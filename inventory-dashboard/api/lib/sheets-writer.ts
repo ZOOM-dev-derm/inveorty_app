@@ -53,6 +53,26 @@ export class AppsScriptWriter implements OrderUpdateWriter {
     return { updated: result.updated, notFound: result.notFound ?? [] };
   }
 
+  async bulkAddHistoryIfMissing(
+    rows: Array<{ item_code: string; inventory: number; date: string }>
+  ): Promise<{ added: number; skipped: number }> {
+    const result = await this.post<{ added: number; skipped: number }>(
+      "bulkAddHistoryIfMissing", { rows }
+    );
+    return { added: result.added ?? 0, skipped: result.skipped ?? 0 };
+  }
+
+  async appendComaxAuditLog(entry: {
+    timestamp: string;
+    emailSubject: string;
+    emailDate: string;
+    itemsUpdated: number;
+    itemsNotFound: number;
+    error: string;
+  }): Promise<void> {
+    await this.post("appendComaxAuditLog", entry);
+  }
+
   async bulkAddProducts(
     products: Array<{ sku: string; name: string; stock: number }>
   ): Promise<{ added: number }> {
