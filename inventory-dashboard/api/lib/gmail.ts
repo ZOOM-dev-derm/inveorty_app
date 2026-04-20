@@ -1,11 +1,13 @@
 import { google } from "googleapis";
 
-function getAuth() {
+function getAuth(refreshToken?: string) {
   const auth = new google.auth.OAuth2(
     process.env.GMAIL_CLIENT_ID,
     process.env.GMAIL_CLIENT_SECRET
   );
-  auth.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+  auth.setCredentials({
+    refresh_token: refreshToken ?? process.env.GMAIL_REFRESH_TOKEN,
+  });
   return auth;
 }
 
@@ -89,9 +91,10 @@ export async function markAsRead(messageId: string): Promise<void> {
 /** Fetch unread emails matching a query, including attachments */
 export async function fetchUnreadEmailsWithAttachments(
   query: string,
-  maxResults = 10
+  maxResults = 10,
+  refreshToken?: string
 ): Promise<EmailWithAttachments[]> {
-  const auth = getAuth();
+  const auth = getAuth(refreshToken);
   const gmail = google.gmail({ version: "v1", auth });
 
   const res = await gmail.users.messages.list({
@@ -176,20 +179,23 @@ async function extractAttachments(
   return attachments;
 }
 
-// Cache resolved label IDs for the lifetime of the function invocation
+// Cache resolved label IDs per (refreshToken, labelName) — labels are per-mailbox
 const labelIdCache = new Map<string, string>();
 
 /**
  * Apply a Gmail label to a message, creating the label if it doesn't exist.
+ * Pass `refreshToken` to operate on a different mailbox than the default GMAIL_REFRESH_TOKEN.
  */
 export async function applyLabel(
   messageId: string,
-  labelName: string
+  labelName: string,
+  refreshToken?: string
 ): Promise<void> {
-  const auth = getAuth();
+  const auth = getAuth(refreshToken);
   const gmail = google.gmail({ version: "v1", auth });
 
-  let labelId = labelIdCache.get(labelName);
+  const cacheKey = `${refreshToken ?? "default"}::${labelName}`;
+  let labelId = labelIdCache.get(cacheKey);
   if (!labelId) {
     const list = await gmail.users.labels.list({ userId: "me" });
     const found = (list.data.labels || []).find((l) => l.name === labelName);
@@ -207,7 +213,7 @@ export async function applyLabel(
       if (!created.data.id) throw new Error(`Failed to create label ${labelName}`);
       labelId = created.data.id;
     }
-    labelIdCache.set(labelName, labelId);
+    labelIdCache.set(cacheKey, labelId);
   }
 
   await gmail.users.messages.modify({

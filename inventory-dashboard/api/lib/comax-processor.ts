@@ -5,6 +5,21 @@ import { emailDateToDDMMYYYY } from "./email-date.js";
 
 const PROCESSED_LABEL = "comax-processed";
 
+/**
+ * Comax inventory reports arrive at amit.b@dermalosophy.co.il, not logistics@.
+ * This env var holds the refresh token for amit.b@'s Gmail; the supplier cron
+ * keeps using the default GMAIL_REFRESH_TOKEN (logistics@).
+ */
+function comaxRefreshToken(): string {
+  const t = process.env.GMAIL_REFRESH_TOKEN_COMAX;
+  if (!t) {
+    throw new Error(
+      "GMAIL_REFRESH_TOKEN_COMAX is not set. Generate a refresh token for amit.b@dermalosophy.co.il via get-gmail-token.mjs and add it to Vercel env."
+    );
+  }
+  return t;
+}
+
 export interface ProcessResult {
   processed: number;
   items: number;
@@ -20,7 +35,8 @@ export function defaultComaxQuery(): string {
 export async function processComaxEmails(
   query: string = defaultComaxQuery()
 ): Promise<ProcessResult> {
-  const emails = await fetchUnreadEmailsWithAttachments(query);
+  const token = comaxRefreshToken();
+  const emails = await fetchUnreadEmailsWithAttachments(query, 10, token);
   if (emails.length === 0) {
     return { processed: 0, items: 0, newProducts: 0, errors: [] };
   }
@@ -39,7 +55,7 @@ export async function processComaxEmails(
       totalItems += result.items;
       totalNewProducts += result.newProducts;
       // Label only on success — failures will be retried by the next run
-      await applyLabel(email.id, PROCESSED_LABEL);
+      await applyLabel(email.id, PROCESSED_LABEL, token);
     } catch (err) {
       const msg = `Failed processing "${email.subject}": ${String(err)}`;
       console.error(msg);
