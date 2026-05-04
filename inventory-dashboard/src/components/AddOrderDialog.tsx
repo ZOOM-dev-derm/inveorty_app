@@ -105,6 +105,16 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     container: string; distributionNotes: string; formula: string; content: string;
   }[]>([]);
 
+  // Review-phase "add another product" panel state
+  const [showAddPanel, setShowAddPanel] = useState(false);
+  const [addSearch, setAddSearch] = useState("");
+  const [addShowDropdown, setAddShowDropdown] = useState(false);
+  const [addSelectedProduct, setAddSelectedProduct] = useState<{ name: string; sku: string; manufacturer: string; warehouseQty: number; supplierSku?: string; container?: string } | null>(null);
+  const [addQuantity, setAddQuantity] = useState("");
+  const [addError, setAddError] = useState("");
+  const addInputRef = useRef<HTMLInputElement>(null);
+  const addDropdownRef = useRef<HTMLDivElement>(null);
+
   // Build min amount lookup from products
   const minAmountMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -174,6 +184,18 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     ).slice(0, 10);
   }, [products, searchQuery]);
 
+  // Filter products for the review-phase "add product" picker — exclude SKUs already in the review list
+  const addFilteredProducts = useMemo(() => {
+    if (!products || !addSearch.trim()) return [];
+    const q = addSearch.trim().toLowerCase();
+    const existing = new Set(reviewItems.map((r) => r.sku.trim()));
+    return products.filter(
+      (p) =>
+        !existing.has(p.sku.trim()) &&
+        (p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+    ).slice(0, 10);
+  }, [products, addSearch, reviewItems]);
+
   // Pre-fill fields when dialog opens with initialData
   useEffect(() => {
     if (open && initialData) {
@@ -228,6 +250,10 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
           inputRef.current && !inputRef.current.contains(e.target as Node)) {
         setShowDropdown(false);
+      }
+      if (addDropdownRef.current && !addDropdownRef.current.contains(e.target as Node) &&
+          addInputRef.current && !addInputRef.current.contains(e.target as Node)) {
+        setAddShowDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -301,6 +327,12 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setEmailStatus("idle");
     setEmailMessage("");
     setEmailOrderRows([]);
+    setShowAddPanel(false);
+    setAddSearch("");
+    setAddShowDropdown(false);
+    setAddSelectedProduct(null);
+    setAddQuantity("");
+    setAddError("");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -636,6 +668,73 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     );
   };
 
+  const handleAddSelectProduct = (product: { name: string; sku: string; manufacturer: string; warehouseQty: number; supplierSku?: string; container?: string }) => {
+    setAddSelectedProduct(product);
+    setAddSearch(product.name);
+    setAddShowDropdown(false);
+    const minAmt = minAmountMap.get(product.sku.trim());
+    if (minAmt && !addQuantity) setAddQuantity(String(minAmt));
+    setAddError("");
+  };
+
+  const handleAddClearProduct = () => {
+    setAddSelectedProduct(null);
+    setAddSearch("");
+    setAddQuantity("");
+    setAddError("");
+    addInputRef.current?.focus();
+  };
+
+  const handleCancelAddPanel = () => {
+    setShowAddPanel(false);
+    setAddSelectedProduct(null);
+    setAddSearch("");
+    setAddQuantity("");
+    setAddError("");
+    setAddShowDropdown(false);
+  };
+
+  const handleAddProductToReview = () => {
+    if (!addSelectedProduct) {
+      setAddError("יש לבחור מוצר מהרשימה");
+      return;
+    }
+    const qty = addQuantity.trim();
+    if (!qty) {
+      setAddError("יש למלא כמות");
+      return;
+    }
+    const sku = addSelectedProduct.sku.trim();
+    if (reviewItems.some((r) => r.sku.trim() === sku)) {
+      setAddError("המוצר כבר קיים ברשימה");
+      return;
+    }
+    const prev = prevOrderMap.get(sku);
+    setReviewItems((cur) => [
+      ...cur,
+      {
+        name: addSelectedProduct.name,
+        sku,
+        supplierSku: addSelectedProduct.supplierSku || supplierSkuMap.get(sku) || "",
+        warehouseQty: addSelectedProduct.warehouseQty,
+        minAmount: minAmountMap.get(sku) ?? 0,
+        quantity: qty,
+        checked: true,
+        isOriginal: false,
+        container: addSelectedProduct.container || "",
+        distributionNotes: prev?.distributionNotes || "",
+        packagingLabels: prev?.packagingLabels || "",
+        formula: prev?.formula || "",
+        content: prev?.content || "",
+      },
+    ]);
+    setAddSearch("");
+    setAddSelectedProduct(null);
+    setAddQuantity("");
+    setAddError("");
+    setShowAddPanel(false);
+  };
+
   const checkedCount = reviewItems.filter((item) => item.checked).length;
   const allResolved = submissionStatuses.length > 0 && submissionStatuses.every((s) => s.status === "success" || s.status === "error");
 
@@ -954,6 +1053,123 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                 });
               })()}
             </div>
+
+            {/* Add another product */}
+            {!showAddPanel ? (
+              <Button
+                variant="outline"
+                className="w-full border-dashed gap-2"
+                onClick={() => setShowAddPanel(true)}
+              >
+                <span className="text-base"><MaterialIcon name="add" /></span>
+                הוסף מוצר
+              </Button>
+            ) : (
+              <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 px-3 py-2.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">הוסף מוצר לרשימה</span>
+                  <button
+                    type="button"
+                    onClick={handleCancelAddPanel}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="סגור"
+                  >
+                    <span className="text-base"><MaterialIcon name="close" /></span>
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <Input
+                    ref={addInputRef}
+                    value={addSelectedProduct ? addSelectedProduct.name : addSearch}
+                    onChange={(e) => {
+                      if (addSelectedProduct) {
+                        handleAddClearProduct();
+                        setAddSearch(e.target.value);
+                      } else {
+                        setAddSearch(e.target.value);
+                      }
+                      setAddShowDropdown(true);
+                      setAddError("");
+                    }}
+                    onFocus={() => {
+                      if (!addSelectedProduct && addSearch.trim()) {
+                        setAddShowDropdown(true);
+                      }
+                    }}
+                    placeholder="חפש לפי שם מוצר או מק״ט..."
+                    readOnly={!!addSelectedProduct}
+                    className={`h-8 text-sm ${addSelectedProduct ? "bg-white/5 pe-9" : ""}`}
+                  />
+                  {addSelectedProduct && (
+                    <button
+                      type="button"
+                      onClick={handleAddClearProduct}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    >
+                      <span className="text-base"><MaterialIcon name="close" /></span>
+                    </button>
+                  )}
+                  {addShowDropdown && addFilteredProducts.length > 0 && !addSelectedProduct && (
+                    <div
+                      ref={addDropdownRef}
+                      className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto"
+                    >
+                      {addFilteredProducts.map((product) => (
+                        <button
+                          key={product.sku}
+                          type="button"
+                          className="w-full px-3 py-2 text-right hover:bg-accent flex items-center justify-between gap-2 text-sm"
+                          onClick={() => handleAddSelectProduct(product)}
+                        >
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{product.name}</div>
+                            <div className="text-xs text-muted-foreground">{product.sku}</div>
+                          </div>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                            מלאי: {product.warehouseQty}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {addSelectedProduct && (
+                  <div className="text-[11px] text-muted-foreground flex items-center gap-3 flex-wrap">
+                    <span>מק״ט: {addSelectedProduct.sku}</span>
+                    <span>מלאי: {addSelectedProduct.warehouseQty}</span>
+                    {(minAmountMap.get(addSelectedProduct.sku.trim()) ?? 0) > 0 && (
+                      <span>מינימום: {minAmountMap.get(addSelectedProduct.sku.trim())}</span>
+                    )}
+                    {addSelectedProduct.container && <span>מיכל: {addSelectedProduct.container}</span>}
+                  </div>
+                )}
+
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="text-[10px] text-muted-foreground">כמות *</label>
+                    <Input
+                      type="number"
+                      value={addQuantity}
+                      onChange={(e) => { setAddQuantity(e.target.value); setAddError(""); }}
+                      placeholder="כמות"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <Button size="sm" className="h-8" onClick={handleAddProductToReview}>
+                    הוסף
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8" onClick={handleCancelAddPanel}>
+                    בטל
+                  </Button>
+                </div>
+
+                {addError && (
+                  <p className="text-destructive text-xs">{addError}</p>
+                )}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex gap-2">
