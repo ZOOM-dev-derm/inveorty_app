@@ -26,7 +26,8 @@ export interface Order {
   quantity: string;
   productName: string;
   received: string;
-  expectedDate: string;
+  productionDate: string;  // תאריך יצור
+  expectedDate: string;    // תאריך הגעה (legacy header: תאריך צפי)
   comments: string;
   container: string;       // מיכל
   rowIndex: number;        // 1-based row in the sheet (for updates)

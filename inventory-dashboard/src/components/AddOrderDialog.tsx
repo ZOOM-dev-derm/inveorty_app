@@ -19,10 +19,21 @@ function todayFormatted(): string {
   return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+function addDaysToDateString(dateStr: string, days: number): string {
+  const m = dateStr.trim().match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+  if (!m) return "";
+  const [, d, mo, y] = m;
+  const dt = new Date(parseInt(y), parseInt(mo) - 1, parseInt(d));
+  if (isNaN(dt.getTime())) return "";
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getDate().toString().padStart(2, "0")}/${(dt.getMonth() + 1).toString().padStart(2, "0")}/${dt.getFullYear()}`;
+}
+
 export interface OrderInitialData {
   productName: string;
   dermaSku: string;
   quantity: string;
+  productionDate?: string;
   expectedDate: string;
   currentStock?: number;
   onTheWay?: number;
@@ -72,7 +83,9 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
   const [dermaSku, setDermaSku] = useState("");
   const [quantity, setQuantity] = useState("");
   const [productName, setProductName] = useState("");
+  const [productionDate, setProductionDate] = useState("");
   const [expectedDate, setExpectedDate] = useState("");
+  const [arrivalEdited, setArrivalEdited] = useState(false);
   const [log, setLog] = useState("");
   const [distributionNotes, setDistributionNotes] = useState("");
   const [packagingLabels, setPackagingLabels] = useState("");
@@ -180,7 +193,9 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       setProductName(initialData.productName);
       setDermaSku(initialData.dermaSku);
       setQuantity(initialData.quantity);
+      setProductionDate(initialData.productionDate ?? "");
       setExpectedDate(initialData.expectedDate);
+      setArrivalEdited(false);
       setOrderDate(initialData.orderDate ?? todayFormatted());
       setLog("");
       setSearchQuery(initialData.productName);
@@ -287,7 +302,9 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     setDermaSku("");
     setQuantity("");
     setProductName("");
+    setProductionDate("");
     setExpectedDate("");
+    setArrivalEdited(false);
     setLog("");
     setDistributionNotes("");
     setPackagingLabels("");
@@ -510,6 +527,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
           dermaSku: item.sku,
           quantity: item.quantity,
           productName: item.name,
+          productionDate: productionDate.trim(),
           expectedDate: expectedDate.trim(),
           log: item.isOriginal ? (log.trim() || undefined) : undefined,
           container: item.container || undefined,
@@ -572,6 +590,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
           dermaSku: item.sku,
           quantity: item.quantity,
           productName: item.name,
+          productionDate: productionDate.trim(),
           expectedDate: expectedDate.trim(),
           log: item.isOriginal ? (log.trim() || undefined) : undefined,
           container: item.container || undefined,
@@ -608,6 +627,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
         dermaSku: item.sku,
         quantity: item.quantity,
         productName: item.name,
+        productionDate: productionDate.trim(),
         expectedDate: expectedDate.trim(),
         log: item.isOriginal ? (log.trim() || undefined) : undefined,
         container: item.container || undefined,
@@ -749,7 +769,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="order-date">תאריך הזמנה</Label>
                   <Input
@@ -760,11 +780,30 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="expected-date">תאריך צפי</Label>
+                  <Label htmlFor="production-date">תאריך יצור</Label>
+                  <Input
+                    id="production-date"
+                    value={productionDate}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setProductionDate(next);
+                      if (!arrivalEdited) {
+                        const derived = addDaysToDateString(next, 7);
+                        if (derived) setExpectedDate(derived);
+                      }
+                    }}
+                    placeholder="DD/MM/YYYY"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="expected-date">תאריך הגעה</Label>
                   <Input
                     id="expected-date"
                     value={expectedDate}
-                    onChange={(e) => setExpectedDate(e.target.value)}
+                    onChange={(e) => {
+                      setExpectedDate(e.target.value);
+                      setArrivalEdited(true);
+                    }}
                     placeholder="DD/MM/YYYY"
                   />
                 </div>
@@ -842,8 +881,11 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
             {/* Shared dates context */}
             <div className="flex items-center gap-4 rounded-lg bg-white/5 px-3 py-2 text-sm">
               <span>תאריך הזמנה: <span className="font-semibold">{orderDate}</span></span>
+              {productionDate && (
+                <span>תאריך יצור: <span className="font-semibold">{productionDate}</span></span>
+              )}
               {expectedDate && (
-                <span>צפי הגעה: <span className="font-semibold">{expectedDate}</span></span>
+                <span>תאריך הגעה: <span className="font-semibold">{expectedDate}</span></span>
               )}
             </div>
 

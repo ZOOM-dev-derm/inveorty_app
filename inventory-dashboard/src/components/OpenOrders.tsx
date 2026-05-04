@@ -94,6 +94,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
   const [followUpMessage, setFollowUpMessage] = useState("");
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editExpectedDate, setEditExpectedDate] = useState("");
+  const [editProductionDate, setEditProductionDate] = useState("");
   const [editQuantity, setEditQuantity] = useState("");
   const [editComments, setEditComments] = useState("");
   const [editContainer, setEditContainer] = useState("");
@@ -166,9 +167,15 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
               {order.container && (
                 <span><span className="font-medium">מיכל:</span> {order.container}</span>
               )}
+              {order.productionDate && (() => {
+                const prod = parseDate(order.productionDate);
+                return prod ? (
+                  <span><span className="font-medium">תאריך יצור:</span> {formatDate(prod)}</span>
+                ) : null;
+              })()}
               {expectedDate && (
                 <span>
-                  <span className="font-medium">תאריך צפוי:</span>{" "}
+                  <span className="font-medium">תאריך הגעה:</span>{" "}
                   <span className={overdue ? "text-destructive font-medium" : ""}>{formatDate(expectedDate)}{estimated && " *"}</span>
                 </span>
               )}
@@ -188,6 +195,11 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
           {received && (
             <Badge className="text-[10px] px-1.5 py-0 bg-green-500/10 text-green-400 border-green-500/20">
               התקבל ✓
+            </Badge>
+          )}
+          {!received && !order.productionDate?.trim() && (
+            <Badge className="text-[10px] px-1.5 py-0 bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+              לבדוק מול פאר פארם
             </Badge>
           )}
           {overdue && !received && (
@@ -280,6 +292,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
             onClick={(e) => {
               e.stopPropagation();
               setEditExpectedDate(order.expectedDate || "");
+              setEditProductionDate(order.productionDate || "");
               setEditQuantity(order.quantity || "");
               setEditComments(order.comments || "");
               setEditContainer(order.container || "");
@@ -368,23 +381,48 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
               <DialogTitle>עריכת הזמנה — {order.productName}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">כמות</label>
+                <input
+                  type="text"
+                  value={editQuantity}
+                  onChange={(e) => setEditQuantity(e.target.value)}
+                  className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">כמות</label>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">תאריך יצור</label>
                   <input
-                    type="text"
-                    value={editQuantity}
-                    onChange={(e) => setEditQuantity(e.target.value)}
+                    type="date"
+                    value={(() => {
+                      const parts = editProductionDate.split(/[/.-]/);
+                      if (parts.length === 3) {
+                        const [d, m, y] = parts;
+                        const year = y.length === 2 ? "20" + y : y;
+                        return `${year}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+                      }
+                      return editProductionDate;
+                    })()}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        const [y, m, d] = val.split("-");
+                        setEditProductionDate(`${d}/${m}/${y}`);
+                      } else {
+                        setEditProductionDate("");
+                      }
+                    }}
                     className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">תאריך צפי</label>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">תאריך הגעה</label>
                   <input
                     type="date"
                     value={(() => {
                       // Convert DD/MM/YYYY to YYYY-MM-DD for input[type=date]
-                      const parts = editExpectedDate.split(/[\/.\-]/);
+                      const parts = editExpectedDate.split(/[/.-]/);
                       if (parts.length === 3) {
                         const [d, m, y] = parts;
                         const year = y.length === 2 ? "20" + y : y;
@@ -444,6 +482,7 @@ function OrderItem({ order, index, mode, expanded, skuNameMap, arrivedFlag, onRe
                 onClick={() => {
                   const fields: Record<string, string> = {};
                   if (editQuantity !== order.quantity) fields['כמות סה"כ'] = editQuantity;
+                  if (editProductionDate !== (order.productionDate || "")) fields["תאריך יצור"] = editProductionDate;
                   if (editExpectedDate !== (order.expectedDate || "")) fields["תאריך צפי"] = editExpectedDate;
                   if (editContainer !== (order.container || "")) fields["מיכל"] = editContainer;
                   if (editDistribution !== (order.distributionNotes || "")) fields["חלוקה+הערות"] = editDistribution;

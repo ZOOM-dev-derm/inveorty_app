@@ -157,7 +157,8 @@ export async function fetchOrders(): Promise<Order[]> {
   const dermaSkuKey = cols.find((k) => k.includes("קוד") && k.includes("דרמה")) ?? cols.find((k) => k.includes("קוד דרמה")) ?? "קוד דרמה";
   const qtyKey = cols.find((k) => k.includes("כמות")) ?? "כמות סה\"כ";
   const receivedKey = cols.find((k) => k.includes("התקבל")) ?? "התקבל";
-  const expectedKey = cols.find((k) => k.includes("צפי")) ?? "תאריך צפי";
+  const expectedKey = cols.find((k) => k.includes("הגעה")) ?? cols.find((k) => k.includes("צפי")) ?? "תאריך צפי";
+  const productionKey = cols.find((k) => k.includes("יצור")) ?? "תאריך יצור";
   // Prioritize exact match for "לוג" (Log) to avoid matching "קטלוג" (Catalog) or similar
   const logKey = cols.find((k) => k.trim() === "לוג") ?? cols.find((k) => k.includes("לוג")) ?? "לוג";
   const supplierSkuKey = cols.find((k) => k.includes("פאר") && k.includes("פארם")) ?? cols.find((k) => k.includes("מק") && k.includes("ספק")) ?? "מק\"ט פאר פארם";
@@ -192,6 +193,7 @@ export async function fetchOrders(): Promise<Order[]> {
         quantity: (row[qtyKey]?.trim() ?? "").replace(/,/g, ""),
         productName: row["שם פריט"]?.trim() ?? "",
         received: row[receivedKey]?.trim() ?? "",
+        productionDate: row[productionKey]?.trim() ?? "",
         expectedDate,
         comments: row[logKey]?.trim() ?? "",
         container: row[containerKey]?.trim() ?? "",
@@ -280,6 +282,7 @@ export async function addOrder(data: {
   dermaSku: string;
   quantity: string;
   productName: string;
+  productionDate: string;
   expectedDate: string;
   log?: string;
   container?: string;
