@@ -139,6 +139,7 @@ function addOrder(ss, data) {
     "כמות סה\"כ": data.quantity || "",
     "שם פריט": data.productName || "",
     "קוד דרמה": data.dermaSku || "",
+    "תאריך יצור": data.productionDate || "",
     "תאריך צפי": data.expectedDate || "",
     "לוג": data.log || "",
     "מיכל": data.container || "",
