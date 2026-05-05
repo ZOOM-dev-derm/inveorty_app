@@ -415,7 +415,16 @@ export function useCriticalDates(items: InventoryOverviewItem[]) {
 export function useAddProduct() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (data: { name: string; sku: string; manufacturer?: string }) => addProduct(data),
+    mutationFn: (data: {
+      name: string;
+      sku: string;
+      manufacturer?: string;
+      minAmount?: number;
+      fixedAssignment?: string;
+      warehouseQty?: number;
+      supplierSku?: string;
+      container?: string;
+    }) => addProduct(data),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["products"] });
     },

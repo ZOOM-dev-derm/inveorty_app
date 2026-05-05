@@ -119,8 +119,40 @@ function addProduct(ss, data) {
   var sheet = getSheetByGid(ss, PRODUCTS_GID);
   if (!sheet) return { success: false, error: "Products sheet not found" };
 
-  // Headers: פריט | שם פריט | ספק | מינימום | שיוך קבוע | יתרת מלאי
-  sheet.appendRow([data.sku || "", data.name || "", data.manufacturer || "", "", "", ""]);
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var numCols = headers.length;
+
+  function numOrBlank(v) {
+    if (v === undefined || v === null || v === "") return "";
+    var n = Number(v);
+    return isNaN(n) ? "" : n;
+  }
+
+  var row = [];
+  for (var i = 0; i < numCols; i++) {
+    var header = headers[i].toString().trim();
+    var matched = "";
+    if (header.indexOf("פאר") !== -1 && header.indexOf("פארם") !== -1) {
+      matched = data.supplierSku || "";
+    } else if (header.indexOf("שם") !== -1 && header.indexOf("פריט") !== -1) {
+      matched = data.name || "";
+    } else if (header === "פריט" || (header.indexOf("פריט") !== -1 && header.indexOf("שם") === -1)) {
+      matched = data.sku || "";
+    } else if (header.indexOf("מינימום") !== -1) {
+      matched = numOrBlank(data.minAmount);
+    } else if (header.indexOf("שיוך") !== -1) {
+      matched = data.fixedAssignment || "";
+    } else if (header.indexOf("יתרת") !== -1 || (header.indexOf("מלאי") !== -1 && header.indexOf("מינימום") === -1)) {
+      matched = numOrBlank(data.warehouseQty);
+    } else if (header.indexOf("מיכל") !== -1) {
+      matched = data.container || "";
+    } else if (header.indexOf("ספק") !== -1) {
+      matched = data.manufacturer || "";
+    }
+    row.push(matched);
+  }
+
+  sheet.appendRow(row);
   return { success: true };
 }
 
