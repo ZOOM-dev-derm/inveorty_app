@@ -272,7 +272,16 @@ async function postToEmailScript(action: string, data?: Record<string, unknown>)
   return postToScript(EMAIL_SCRIPT_URL || APPS_SCRIPT_URL, action, data);
 }
 
-export async function addProduct(data: { name: string; sku: string; manufacturer?: string }) {
+export async function addProduct(data: {
+  name: string;
+  sku: string;
+  manufacturer?: string;
+  minAmount?: number;
+  fixedAssignment?: string;
+  warehouseQty?: number;
+  supplierSku?: string;
+  container?: string;
+}) {
   return postToSheet("addProduct", data);
 }
 
