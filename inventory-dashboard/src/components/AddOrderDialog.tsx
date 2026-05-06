@@ -209,6 +209,21 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     ).slice(0, 10);
   }, [products, addSearch, reviewItems]);
 
+  // When the search matches a product already in the review list, surface it as a hint
+  // so the user understands why the regular dropdown is empty and can check it in one click.
+  const addAlreadyInListMatch = useMemo(() => {
+    if (!products || !addSearch.trim()) return null;
+    const q = addSearch.trim().toLowerCase();
+    const existing = new Set(reviewItems.map((r) => r.sku.trim()));
+    return (
+      products.find(
+        (p) =>
+          existing.has(p.sku.trim()) &&
+          (p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+      ) ?? null
+    );
+  }, [products, addSearch, reviewItems]);
+
   // Pre-fill fields when dialog opens with initialData
   useEffect(() => {
     if (open && initialData) {
@@ -711,6 +726,16 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     addInputRef.current?.focus();
   };
 
+  const handleCheckExistingItem = (sku: string) => {
+    const target = sku.trim();
+    setReviewItems((prev) =>
+      prev.map((r) => (r.sku.trim() === target ? { ...r, checked: true } : r))
+    );
+    setAddSearch("");
+    setAddShowDropdown(false);
+    setShowAddPanel(false);
+  };
+
   const handleCancelAddPanel = () => {
     setShowAddPanel(false);
     setAddSelectedProduct(null);
@@ -1158,7 +1183,7 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                       <span className="text-base"><MaterialIcon name="close" /></span>
                     </button>
                   )}
-                  {addShowDropdown && addFilteredProducts.length > 0 && !addSelectedProduct && (
+                  {addShowDropdown && !addSelectedProduct && (addFilteredProducts.length > 0 || addAlreadyInListMatch) && (
                     <div
                       ref={addDropdownRef}
                       className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto"
@@ -1179,6 +1204,23 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
                           </span>
                         </button>
                       ))}
+                      {addFilteredProducts.length === 0 && addAlreadyInListMatch && (
+                        <button
+                          type="button"
+                          className="w-full px-3 py-2 text-right hover:bg-accent text-sm flex items-start gap-2 text-amber-500"
+                          onClick={() => handleCheckExistingItem(addAlreadyInListMatch.sku)}
+                        >
+                          <span className="text-base mt-0.5"><MaterialIcon name="info" /></span>
+                          <div className="min-w-0 text-right">
+                            <div className="font-medium truncate">
+                              "{addAlreadyInListMatch.name}" כבר ברשימה
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
+                              לחצי כדי לסמן ולהוסיף להזמנה
+                            </div>
+                          </div>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
