@@ -329,24 +329,22 @@ export function ProductGraph({ sku, productName, currentStock, onTheWay, onOrder
           )}
 
           {/* Quick Order Button */}
-          {criticalPoint && minAmount !== null && (
-            <AddOrderDialog
-              trigger={
-                <Button variant="outline" size="sm" className="h-6 md:h-7 gap-1.5 text-[10px] md:text-xs px-2 md:px-2.5 border-primary/30 text-primary hover:bg-primary/5">
-                  <MaterialIcon name="shopping_cart" className="text-xs" />
-                  הזמן עכשיו
-                </Button>
-              }
-              initialData={{
-                productName,
-                dermaSku: sku,
-                quantity: String(minAmount),
-                expectedDate: criticalPoint.date,
-                currentStock,
-                onTheWay,
-              }}
-            />
-          )}
+          <AddOrderDialog
+            trigger={
+              <Button variant="outline" size="sm" className="h-6 md:h-7 gap-1.5 text-[10px] md:text-xs px-2 md:px-2.5 border-primary/30 text-primary hover:bg-primary/5">
+                <MaterialIcon name="shopping_cart" className="text-xs" />
+                הזמן עכשיו
+              </Button>
+            }
+            initialData={{
+              productName,
+              dermaSku: sku,
+              quantity: minAmount !== null ? String(minAmount) : "",
+              expectedDate: criticalPoint?.date ?? "",
+              currentStock,
+              onTheWay,
+            }}
+          />
         </div>
 
         {/* Rate Comparison */}
