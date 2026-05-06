@@ -498,8 +498,11 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     const checkedItems = reviewItems.filter((item) => item.checked);
     if (checkedItems.length === 0) return;
 
-    // Build email preview BEFORE submitting — orders go to DB only after email is confirmed
-    setEmailMessage("שלום רב,\nמצורפת טבלת הזמנות.\nנא לאשר קבלת ההזמנה.");
+    // Preserve user's email message edits if they've been to the email phase already
+    const isReentry = emailOrderRows.length > 0;
+    if (!isReentry) {
+      setEmailMessage("שלום רב,\nמצורפת טבלת הזמנות.\nנא לאשר קבלת ההזמנה.");
+    }
 
     // Resolve container SKU to product name
     const skuToName = new Map<string, string>();
@@ -519,16 +522,19 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     }
 
     setEmailOrderRows(
-      checkedItems.map((item) => ({
-        name: item.name,
-        sku: item.sku,
-        supplierSku: item.supplierSku,
-        quantity: item.quantity,
-        container: resolveContainer(item.container || ""),
-        distributionNotes: item.distributionNotes || "",
-        formula: item.formula || "",
-        content: item.content || "",
-      }))
+      checkedItems.map((item) => {
+        const prior = emailOrderRows.find((r) => r.sku === item.sku);
+        return {
+          sku: item.sku,
+          supplierSku: item.supplierSku,
+          quantity: item.quantity,
+          distributionNotes: item.distributionNotes || "",
+          name: prior?.name ?? item.name,
+          container: prior?.container ?? resolveContainer(item.container || ""),
+          formula: prior?.formula ?? (item.formula || ""),
+          content: prior?.content ?? (item.content || ""),
+        };
+      })
     );
     setDialogPhase("email");
   };
@@ -1306,6 +1312,9 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
               </Button>
               <Button variant="outline" onClick={handleSkipEmail}>
                 אשר בלי מייל
+              </Button>
+              <Button variant="outline" onClick={() => setDialogPhase("review")}>
+                חזור לעריכה
               </Button>
             </div>
           </div>
