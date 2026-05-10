@@ -201,13 +201,10 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
   const addFilteredProducts = useMemo(() => {
     if (!products || !addSearch.trim()) return [];
     const q = addSearch.trim().toLowerCase();
-    const existing = new Set(reviewItems.map((r) => r.sku.trim()));
     return products.filter(
-      (p) =>
-        !existing.has(p.sku.trim()) &&
-        (p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+      (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
     ).slice(0, 10);
-  }, [products, addSearch, reviewItems]);
+  }, [products, addSearch]);
 
   // Pre-fill fields when dialog opens with initialData
   useEffect(() => {
@@ -731,10 +728,6 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
       return;
     }
     const sku = addSelectedProduct.sku.trim();
-    if (reviewItems.some((r) => r.sku.trim() === sku)) {
-      setAddError("המוצר כבר קיים ברשימה");
-      return;
-    }
     const prev = prevOrderMap.get(sku);
     setReviewItems((cur) => [
       ...cur,
