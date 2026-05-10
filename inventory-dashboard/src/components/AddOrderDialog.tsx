@@ -188,22 +188,32 @@ export function AddOrderDialog({ initialData, open: controlledOpen, onOpenChange
     });
   }, [products, openOrderSkus]);
 
+  // Rank search results: exact SKU → SKU starts-with → SKU/name contains
+  const rankMatch = (sku: string, q: string): number => {
+    const s = sku.toLowerCase();
+    if (s === q) return 0;
+    if (s.startsWith(q)) return 1;
+    return 2;
+  };
+
   // Filter products by search query
   const filteredProducts = useMemo(() => {
     if (!products || !searchQuery.trim()) return [];
     const q = searchQuery.trim().toLowerCase();
-    return products.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
-    ).slice(0, 10);
+    return products
+      .filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+      .sort((a, b) => rankMatch(a.sku, q) - rankMatch(b.sku, q))
+      .slice(0, 10);
   }, [products, searchQuery]);
 
-  // Filter products for the review-phase "add product" picker — exclude SKUs already in the review list
+  // Filter products for the review-phase "add product" picker
   const addFilteredProducts = useMemo(() => {
     if (!products || !addSearch.trim()) return [];
     const q = addSearch.trim().toLowerCase();
-    return products.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
-    ).slice(0, 10);
+    return products
+      .filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+      .sort((a, b) => rankMatch(a.sku, q) - rankMatch(b.sku, q))
+      .slice(0, 10);
   }, [products, addSearch]);
 
   // Pre-fill fields when dialog opens with initialData
