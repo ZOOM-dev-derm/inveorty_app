@@ -51,6 +51,9 @@ function doPost(e) {
       case "bulkUpdateMinAmounts":
         result = bulkUpdateMinAmounts(ss, data);
         break;
+      case "bulkUpdateProductFields":
+        result = bulkUpdateProductFields(ss, data);
+        break;
       case "sendFollowUp":
         result = sendFollowUp(ss, data);
         break;
@@ -809,6 +812,72 @@ function bulkUpdateMinAmounts(ss, data) {
   }
 
   return { success: true, updated: updated, notFound: notFound };
+}
+
+/**
+ * Bulk update arbitrary fields on Products sheet rows by SKU.
+ * data.items = [{sku, fields: {minAmount?, manufacturer?, container?, supplierSku?, fixedAssignment?, name?}}]
+ * Returns {success, updated, notFound, skippedFields}.
+ */
+function bulkUpdateProductFields(ss, data) {
+  var sheet = getSheetByGid(ss, PRODUCTS_GID);
+  if (!sheet) return { success: false, error: "Products sheet not found" };
+
+  var items = data.items;
+  if (!items || !items.length) return { success: false, error: "No items provided" };
+
+  var FIELD_TO_HEADER = {
+    minAmount: "מינימום",
+    manufacturer: "ספק",
+    container: "מיכל",
+    supplierSku: "מק\"ט פאר פארם",
+    fixedAssignment: "שיוך קבוע",
+    name: "שם פריט"
+  };
+
+  var allData = sheet.getDataRange().getValues();
+  var headers = allData[0];
+
+  var skuCol = -1;
+  var fieldCols = {};
+  for (var i = 0; i < headers.length; i++) {
+    var h = headers[i].toString().trim();
+    if (h === "פריט") skuCol = i;
+    for (var logical in FIELD_TO_HEADER) {
+      if (h === FIELD_TO_HEADER[logical]) fieldCols[logical] = i;
+    }
+  }
+  if (skuCol === -1) return { success: false, error: "SKU column (פריט) not found" };
+
+  var skuToRow = {};
+  for (var r = 1; r < allData.length; r++) {
+    var sku = allData[r][skuCol].toString().trim();
+    if (sku) skuToRow[sku] = r + 1;
+  }
+
+  var updated = 0;
+  var notFound = [];
+  var skippedFields = [];
+  for (var j = 0; j < items.length; j++) {
+    var itemSku = items[j].sku.toString().trim();
+    var fields = items[j].fields || {};
+    var row = skuToRow[itemSku];
+    if (!row) {
+      notFound.push(itemSku);
+      continue;
+    }
+    for (var logicalName in fields) {
+      var col = fieldCols[logicalName];
+      if (col === undefined) {
+        skippedFields.push({ sku: itemSku, field: logicalName });
+        continue;
+      }
+      sheet.getRange(row, col + 1).setValue(fields[logicalName]);
+    }
+    updated++;
+  }
+
+  return { success: true, updated: updated, notFound: notFound, skippedFields: skippedFields };
 }
 
 // ── Email Integration (Peer Pharm / פאר פארם) ──
