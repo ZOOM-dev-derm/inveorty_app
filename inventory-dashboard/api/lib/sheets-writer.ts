@@ -40,8 +40,9 @@ export class AppsScriptWriter implements OrderUpdateWriter {
 
   async bulkAddHistory(
     rows: Array<{ item_code: string; inventory: number; date: string }>
-  ): Promise<void> {
-    await this.post("bulkAddHistory", { rows });
+  ): Promise<{ added: number }> {
+    const result = await this.post<{ added: number }>("bulkAddHistory", { rows });
+    return { added: result.added ?? 0 };
   }
 
   async bulkUpdateStock(
