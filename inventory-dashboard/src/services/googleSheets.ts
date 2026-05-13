@@ -154,6 +154,13 @@ export async function fetchOrders(): Promise<Order[]> {
   const cols = Object.keys(firstDataRow);
   console.debug("[fetchOrders] all columns:", cols);
 
+  const REQUIRED_HEADERS = ["שם פריט", "תאריך הזמנה"];
+  const missing = REQUIRED_HEADERS.filter((h) => !cols.includes(h));
+  if (missing.length > 0) {
+    console.error("[fetchOrders] Orders sheet header row appears to be missing or moved. Detected columns:", cols, "Missing expected:", missing);
+    throw new Error(`גיליון ההזמנות: שורת הכותרת חסרה או הועברה ממקומה. עמודות נדרשות חסרות: ${missing.join(", ")}. ודא ששורת הכותרת היא שורה 1 והקפא אותה.`);
+  }
+
   const dermaSkuKey = cols.find((k) => k.includes("קוד") && k.includes("דרמה")) ?? cols.find((k) => k.includes("קוד דרמה")) ?? "קוד דרמה";
   const qtyKey = cols.find((k) => k.includes("כמות")) ?? "כמות סה\"כ";
   const receivedKey = cols.find((k) => k.includes("התקבל")) ?? "התקבל";
